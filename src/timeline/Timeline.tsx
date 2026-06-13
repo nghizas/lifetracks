@@ -35,6 +35,7 @@ export function Timeline() {
   const renameTrack = useStore((s) => s.renameTrack);
   const setSelection = useStore((s) => s.setSelection);
   const selection = useStore((s) => s.selection);
+  const openSheet = useStore((s) => s.openSheet);
   const horizonYears = useStore((s) => s.roadmap.settings.horizonYears);
 
   const today = todayStr();
@@ -203,6 +204,9 @@ export function Timeline() {
                 if (window.confirm("Delete this track and its clips?")) removeTrack(id);
               }}
               onRenameTrack={renameTrack}
+              onAddClipToTrack={(id) =>
+                openSheet({ kind: "new-clip", defaults: { trackId: id } })
+              }
             />
           </div>
         </div>
@@ -252,7 +256,10 @@ export function Timeline() {
               {boxes.map(({ clip, box, color }) => {
                 const isSelected =
                   selection?.kind === "clip" && selection.id === clip.id;
-                const onClick = () => setSelection({ kind: "clip", id: clip.id });
+                const onClick = () => {
+                  setSelection({ kind: "clip", id: clip.id });
+                  openSheet({ kind: "edit-clip", clipId: clip.id });
+                };
                 switch (clip.kind) {
                   case "task":
                     return (

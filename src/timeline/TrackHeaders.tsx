@@ -10,6 +10,7 @@ interface Props {
   width: number;
   onRemoveTrack?: (id: string) => void;
   onRenameTrack?: (id: string, name: string) => void;
+  onAddClipToTrack?: (id: string) => void;
 }
 
 export function TrackHeaders({
@@ -18,6 +19,7 @@ export function TrackHeaders({
   width,
   onRemoveTrack,
   onRenameTrack,
+  onAddClipToTrack,
 }: Props) {
   return (
     <div
@@ -49,6 +51,16 @@ export function TrackHeaders({
             >
               {t.name}
             </button>
+            {onAddClipToTrack ? (
+              <button
+                type="button"
+                onClick={() => onAddClipToTrack(t.id)}
+                className="text-base leading-none text-muted"
+                aria-label={`Add clip to ${t.name}`}
+              >
+                +
+              </button>
+            ) : null}
             {onRemoveTrack ? (
               <button
                 type="button"

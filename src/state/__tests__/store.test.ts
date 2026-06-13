@@ -110,4 +110,21 @@ describe("store actions", () => {
     expect(useStore.getState().view.pxPerDay).toBe(8);
     expect(useStore.getState().selection).toEqual({ kind: "track", id: "anything" });
   });
+
+  it("openSheet / closeSheet swap sheet state without history", () => {
+    const before = useStore.getState().history.undo.length;
+    useStore.getState().openSheet({ kind: "new-track" });
+    expect(useStore.getState().sheet).toEqual({ kind: "new-track" });
+    useStore.getState().openSheet({
+      kind: "new-clip",
+      defaults: { trackId: "x", start: "2026-08-01" },
+    });
+    expect(useStore.getState().sheet).toEqual({
+      kind: "new-clip",
+      defaults: { trackId: "x", start: "2026-08-01" },
+    });
+    useStore.getState().closeSheet();
+    expect(useStore.getState().sheet).toBeNull();
+    expect(useStore.getState().history.undo.length).toBe(before);
+  });
 });

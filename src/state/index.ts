@@ -6,6 +6,7 @@ export {
   type LifetracksStore,
   type ViewState,
   type Selection,
+  type SheetState,
 } from "./store";
 export { bindPersistence } from "./persistence";
 export { uid } from "./uid";

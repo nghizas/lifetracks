@@ -32,6 +32,12 @@ export interface Selection {
   id: string;
 }
 
+export type SheetState =
+  | { kind: "new-track" }
+  | { kind: "new-clip"; defaults?: { trackId?: string; start?: string } }
+  | { kind: "edit-clip"; clipId: string }
+  | null;
+
 export interface LifetracksStore {
   // Persisted
   roadmap: Roadmap;
@@ -68,9 +74,12 @@ export interface LifetracksStore {
   canUndo: () => boolean;
   canRedo: () => boolean;
 
-  // View / selection (non-undoable)
+  // View / selection / sheet (non-undoable)
   setView: (v: Partial<ViewState>) => void;
   setSelection: (s: Selection | null) => void;
+  sheet: SheetState;
+  openSheet: (s: NonNullable<SheetState>) => void;
+  closeSheet: () => void;
 }
 
 const EMPTY_ROADMAP: Roadmap = RoadmapSchema.parse({
@@ -96,6 +105,7 @@ export const useStore = create<LifetracksStore>((set, get) => {
     ready: false,
     view: { scrollX: 0, pxPerDay: 4 },
     selection: null,
+    sheet: null,
     history: { undo: [], redo: [] },
 
     hydrate(roadmap) {
@@ -244,6 +254,14 @@ export const useStore = create<LifetracksStore>((set, get) => {
 
     setSelection(selection) {
       set({ selection });
+    },
+
+    openSheet(sheet) {
+      set({ sheet });
+    },
+
+    closeSheet() {
+      set({ sheet: null });
     },
   };
 });
