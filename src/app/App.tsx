@@ -88,6 +88,7 @@ export function App() {
                 type="button"
                 onClick={() => setShowBalance((b) => !b)}
                 aria-pressed={showBalance}
+                aria-label="Toggle balance meter"
                 className={`rounded-full border px-3 py-1.5 text-[11px] font-medium ${
                   showBalance
                     ? "border-ink bg-ink text-white"
@@ -95,6 +96,14 @@ export function App() {
                 }`}
               >
                 ⚖
+              </button>
+              <button
+                type="button"
+                onClick={() => openSheet({ kind: "settings" })}
+                aria-label="Settings"
+                className="rounded-full border border-ink/15 px-3 py-1.5 text-[11px] font-medium"
+              >
+                ⋯
               </button>
               <span className="ml-auto flex gap-1">
                 <button

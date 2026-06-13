@@ -7,3 +7,4 @@ export { ConflictsSheet } from "./ConflictsSheet";
 export { StatusBar } from "./StatusBar";
 export { BalanceMeter } from "./BalanceMeter";
 export { EmptyState } from "./EmptyState";
+export { SettingsSheet } from "./SettingsSheet";

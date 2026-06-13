@@ -4,6 +4,7 @@
 import { EditClipSheet } from "./EditClipSheet";
 import { NewClipSheet } from "./NewClipSheet";
 import { NewTrackSheet } from "./NewTrackSheet";
+import { SettingsSheet } from "./SettingsSheet";
 
 export function SheetHost() {
   return (
@@ -11,6 +12,7 @@ export function SheetHost() {
       <NewTrackSheet />
       <NewClipSheet />
       <EditClipSheet />
+      <SettingsSheet />
     </>
   );
 }

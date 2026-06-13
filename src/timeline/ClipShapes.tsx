@@ -24,6 +24,8 @@ export function TaskBar({ clip, trackColor, box, selected, onClick }: BaseProps)
     <g
       onPointerUp={onClick}
       style={{ cursor: "pointer" }}
+      data-clip-id={clip.id}
+      data-clip-kind="task"
       aria-label={`Task: ${clip.title}`}
     >
       <rect
@@ -60,6 +62,8 @@ export function StemBar({ clip, trackColor, box, selected, onClick }: BaseProps)
     <g
       onPointerUp={onClick}
       style={{ cursor: "pointer" }}
+      data-clip-id={clip.id}
+      data-clip-kind="stem"
       aria-label={`Stem: ${clip.title}`}
     >
       <line
@@ -109,6 +113,8 @@ export function EventDiamond({ clip, trackColor, box, selected, onClick }: BaseP
     <g
       onPointerUp={onClick}
       style={{ cursor: "pointer" }}
+      data-clip-id={clip.id}
+      data-clip-kind="event"
       aria-label={`Event: ${clip.title}`}
     >
       {clip.disruption && box.w > 0 ? (
@@ -141,6 +147,8 @@ export function FlagMarker({ clip, trackColor, box, selected, onClick }: BasePro
     <g
       onPointerUp={onClick}
       style={{ cursor: "pointer" }}
+      data-clip-id={clip.id}
+      data-clip-kind="flag"
       aria-label={`Flag: ${clip.title}`}
     >
       <line x1={x} y1={top} x2={x} y2={bot} stroke={trackColor} strokeWidth={1} />

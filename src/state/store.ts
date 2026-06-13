@@ -37,6 +37,7 @@ export type SheetState =
   | { kind: "new-track" }
   | { kind: "new-clip"; defaults?: { trackId?: string; start?: string } }
   | { kind: "edit-clip"; clipId: string }
+  | { kind: "settings" }
   | null;
 
 export interface LifetracksStore {
@@ -292,5 +293,18 @@ export const useStore = create<LifetracksStore>((set, get) => {
 /** Selector helpers (stable references for React subscribers). */
 export const selectTracks = (s: LifetracksStore): Track[] => s.roadmap.tracks;
 export const selectClips = (s: LifetracksStore): Clip[] => s.roadmap.clips;
-export const selectOrderedTracks = (s: LifetracksStore): Track[] =>
-  s.roadmap.tracks.slice().sort((a, b) => a.order - b.order);
+
+// Memoised sort: returns the same array reference as long as the input
+// array is the same reference. Without this, every render of any component
+// using `selectOrderedTracks` would produce a new array and Zustand's
+// `getSnapshot` would detect an infinite loop (React 18 useSyncExternalStore).
+const orderedCache = new WeakMap<readonly Track[], Track[]>();
+export function selectOrderedTracks(s: LifetracksStore): Track[] {
+  const raw = s.roadmap.tracks;
+  let sorted = orderedCache.get(raw);
+  if (!sorted) {
+    sorted = raw.slice().sort((a, b) => a.order - b.order);
+    orderedCache.set(raw, sorted);
+  }
+  return sorted;
+}
