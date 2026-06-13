@@ -1,7 +1,13 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useStore, selectOrderedTracks } from "@/state";
 import { Timeline } from "@/timeline";
-import { SheetHost } from "@/panels";
+import {
+  BalanceMeter,
+  ConflictsSheet,
+  EmptyState,
+  SheetHost,
+  StatusBar,
+} from "@/panels";
 
 export function App() {
   const ready = useStore((s) => s.ready);
@@ -12,8 +18,9 @@ export function App() {
   const undo = useStore((s) => s.undo);
   const redo = useStore((s) => s.redo);
 
-  // Keyboard shortcuts (desktop): cmd/ctrl-Z = undo, cmd/ctrl-shift-Z = redo,
-  // `t` = new track, `n` = new clip
+  const [conflictsOpen, setConflictsOpen] = useState(false);
+  const [showBalance, setShowBalance] = useState(false);
+
   useEffect(() => {
     if (!ready) return;
     const onKey = (e: KeyboardEvent) => {
@@ -36,6 +43,9 @@ export function App() {
         e.preventDefault();
         openSheet({ kind: "new-clip" });
       }
+      if (e.key === "b") {
+        setShowBalance((b) => !b);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -47,7 +57,7 @@ export function App() {
         <header className="flex shrink-0 items-center justify-between border-b border-ink/5 px-4 pb-2 pt-[max(env(safe-area-inset-top),0.75rem)]">
           <h1 className="text-base font-semibold tracking-tight">Lifetracks</h1>
           <span className="rounded-full bg-ink/5 px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted">
-            1c
+            1d
           </span>
         </header>
 
@@ -55,6 +65,8 @@ export function App() {
           <div className="flex flex-1 items-center justify-center text-sm text-muted">
             loading…
           </div>
+        ) : tracks.length === 0 ? (
+          <EmptyState />
         ) : (
           <>
             <div className="flex shrink-0 items-center gap-1.5 border-b border-ink/5 px-3 py-2">
@@ -67,11 +79,22 @@ export function App() {
               </button>
               <button
                 type="button"
-                disabled={tracks.length === 0}
                 onClick={() => openSheet({ kind: "new-clip" })}
-                className="rounded-full border border-ink/15 px-3 py-1.5 text-[11px] font-medium disabled:opacity-40"
+                className="rounded-full border border-ink/15 px-3 py-1.5 text-[11px] font-medium"
               >
                 + Clip
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowBalance((b) => !b)}
+                aria-pressed={showBalance}
+                className={`rounded-full border px-3 py-1.5 text-[11px] font-medium ${
+                  showBalance
+                    ? "border-ink bg-ink text-white"
+                    : "border-ink/15 text-ink"
+                }`}
+              >
+                ⚖
               </button>
               <span className="ml-auto flex gap-1">
                 <button
@@ -95,6 +118,10 @@ export function App() {
               </span>
             </div>
 
+            <StatusBar onOpenConflicts={() => setConflictsOpen(true)} />
+
+            {showBalance ? <BalanceMeter /> : null}
+
             <div className="flex-1 overflow-hidden">
               <Timeline />
             </div>
@@ -103,6 +130,7 @@ export function App() {
       </div>
 
       <SheetHost />
+      <ConflictsSheet open={conflictsOpen} onClose={() => setConflictsOpen(false)} />
     </>
   );
 }

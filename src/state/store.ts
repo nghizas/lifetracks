@@ -19,6 +19,7 @@ import {
   applyCommand,
 } from "./commands";
 import { makeClip, makeTrack } from "./factories";
+import { buildSampleLife } from "./seeds";
 
 const MAX_HISTORY = 100;
 
@@ -73,6 +74,9 @@ export interface LifetracksStore {
   redo: () => void;
   canUndo: () => boolean;
   canRedo: () => boolean;
+
+  /** Insert a curated sample roadmap (undoable). */
+  loadSample: () => void;
 
   // View / selection / sheet (non-undoable)
   setView: (v: Partial<ViewState>) => void;
@@ -246,6 +250,25 @@ export const useStore = create<LifetracksStore>((set, get) => {
 
     canRedo() {
       return get().history.redo.length > 0;
+    },
+
+    loadSample() {
+      const seed = buildSampleLife(todayStr());
+      const forward: Command = {
+        type: "batch",
+        cmds: [
+          ...seed.tracks.map<Command>((t) => ({ type: "addTrack", track: t })),
+          ...seed.clips.map<Command>((c) => ({ type: "addClip", clip: c })),
+        ],
+      };
+      const inverse: Command = {
+        type: "batch",
+        cmds: [
+          ...seed.clips.map<Command>((c) => ({ type: "removeClip", clipId: c.id })),
+          ...seed.tracks.map<Command>((t) => ({ type: "removeTrack", trackId: t.id })),
+        ],
+      };
+      executeCommand(forward, inverse);
     },
 
     setView(v) {
