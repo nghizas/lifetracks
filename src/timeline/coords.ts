@@ -32,7 +32,10 @@ export function dateForScreenX(
 
 export const PX_PER_DAY_MIN = 0.25;
 export const PX_PER_DAY_MAX = 40;
-export const DEFAULT_PX_PER_DAY = 4;
+// 10 px/day puts the default view in the "month" ruler scale (Jan, Feb, Mar…)
+// rather than the cryptic "Q3" of the previous default. ~14 months visible on a
+// 390px-wide phone after the track header column.
+export const DEFAULT_PX_PER_DAY = 10;
 
 export function clampPxPerDay(p: number): number {
   return Math.max(PX_PER_DAY_MIN, Math.min(PX_PER_DAY_MAX, p));

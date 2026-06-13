@@ -12,7 +12,7 @@ interface Props {
   height?: number;
 }
 
-export function Ruler({ origin, scrollX, pxPerDay, width, height = 28 }: Props) {
+export function Ruler({ origin, scrollX, pxPerDay, width, height = 36 }: Props) {
   const ticks = useMemo(() => {
     const start = dateForScreenX(origin, 0, pxPerDay, scrollX);
     const end = dateForScreenX(origin, width, pxPerDay, scrollX);
@@ -25,23 +25,23 @@ export function Ruler({ origin, scrollX, pxPerDay, width, height = 28 }: Props) 
       <line x1={0} y1={height - 0.5} x2={width} y2={height - 0.5} stroke="#e5e7eb" />
       {ticks.map((t) => {
         const x = screenXForDate(origin, t.date, pxPerDay, scrollX);
-        if (x < -40 || x > width + 40) return null;
+        if (x < -60 || x > width + 60) return null;
         return (
           <g key={t.date} transform={`translate(${x},0)`}>
             <line
               x1={0}
-              y1={t.major ? 0 : height - 8}
+              y1={t.major ? 0 : height - 10}
               x2={0}
               y2={height}
-              stroke={t.major ? "#9ca3af" : "#e5e7eb"}
+              stroke={t.major ? "#6b7280" : "#d1d5db"}
               strokeWidth={1}
             />
             <text
               x={4}
-              y={height - 10}
-              fontSize={t.major ? 11 : 10}
-              fontWeight={t.major ? 600 : 400}
-              fill={t.major ? "#0f1217" : "#6b7280"}
+              y={height - 12}
+              fontSize={t.major ? 12 : 11}
+              fontWeight={t.major ? 700 : 500}
+              fill={t.major ? "#0f1217" : "#374151"}
               style={{ userSelect: "none" }}
             >
               {t.label}

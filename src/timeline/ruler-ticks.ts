@@ -53,7 +53,10 @@ export function generateTicks(
       const m = d.getMonth() + 1;
       if (m === 1 || m === 4 || m === 7 || m === 10) {
         const isYearStart = m === 1;
-        const label = isYearStart ? String(d.getFullYear()) : `Q${(m - 1) / 3 + 1}`;
+        const yy = String(d.getFullYear()).slice(2);
+        // Always include year context — bare "Q3" was the source of the
+        // "wut" reaction on small phone displays.
+        const label = isYearStart ? `Q1 ${d.getFullYear()}` : `Q${(m - 1) / 3 + 1} '${yy}`;
         ticks.push({ date: cursor, label, major: isYearStart });
       }
       cursor = addMonths(cursor, 1);
@@ -66,10 +69,10 @@ export function generateTicks(
     while (parseDate(cursor) <= end) {
       const d = parseDate(cursor);
       const m = d.getMonth();
-      const label =
-        m === 0
-          ? String(d.getFullYear())
-          : d.toLocaleString(undefined, { month: "short" });
+      // January gets the year ("Jan 2026"). Every other month shows the
+      // short name; we'll still render year inline once it's available.
+      const month = d.toLocaleString(undefined, { month: "short" });
+      const label = m === 0 ? `${month} ${d.getFullYear()}` : month;
       ticks.push({ date: cursor, label, major: m === 0 });
       cursor = addMonths(cursor, 1);
     }

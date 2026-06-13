@@ -15,7 +15,7 @@ function resetStore(): void {
     ready: false,
     history: { undo: [], redo: [] },
     selection: null,
-    view: { scrollX: 0, pxPerDay: 4 },
+    view: { scrollX: 0, pxPerDay: 10, headerWidth: 124 },
   });
 }
 
