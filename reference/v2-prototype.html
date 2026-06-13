@@ -1,0 +1,2600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lifetracks</title>
+<style>
+  /* --- reset / base --- */
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+  body {
+    font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #0f1115; color: #e7e9ec;
+  }
+  button, input, textarea, select {
+    font: inherit; color: inherit;
+    background: #1b1e25; border: 1px solid #2a2f3a; border-radius: 5px;
+    padding: 4px 8px; outline: none;
+  }
+  button { cursor: pointer; }
+  button:hover { background: #242833; }
+  input:focus, textarea:focus, select:focus { border-color: #4a5468; }
+  textarea { resize: vertical; }
+  .btn-primary { background: #2d6cdf; border-color: #2d6cdf; color: white; }
+  .btn-primary:hover { background: #3b7be8; }
+  .btn-danger { background: #8a2a2a; border-color: #8a2a2a; }
+  .btn-danger:hover { background: #a13434; }
+  .muted { color: #8a93a3; }
+  .row { display: flex; gap: 6px; align-items: center; }
+  .col { display: flex; flex-direction: column; gap: 6px; }
+
+  /* --- layout --- */
+  #app {
+    display: grid;
+    grid-template-rows: 40px auto auto 1fr 28px 60px;
+    grid-template-columns: 180px 1fr;
+    height: 100vh;
+    width: 100vw;
+  }
+  #topbar {
+    grid-column: 1 / -1;
+    display: flex; align-items: center; gap: 8px;
+    padding: 0 12px;
+    background: #14171d; border-bottom: 1px solid #232733;
+  }
+  #topbar .title { font-weight: 600; letter-spacing: 0.2px; margin-right: 12px; }
+  #topbar .grow { flex: 1; }
+  #upnext {
+    grid-column: 1 / -1;
+    background: #161a22; border-bottom: 1px solid #232733;
+    padding: 6px 10px;
+    display: flex; gap: 8px; align-items: center;
+    overflow-x: auto; min-height: 36px;
+  }
+  #upnext .lbl { color: #8a93a3; font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; flex-shrink: 0; }
+  .upnext-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #1b1f29; border: 1px solid #2a2f3a; border-radius: 14px;
+    padding: 3px 8px; font-size: 12px; flex-shrink: 0;
+  }
+  .upnext-chip .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .upnext-chip .when { color: #8a93a3; }
+  .upnext-chip button { padding: 0 4px; font-size: 10px; border-radius: 3px; line-height: 16px; }
+
+  #conflictbar {
+    grid-column: 1 / -1;
+    background: #1a1820; border-bottom: 1px solid #2a2230;
+    padding: 0 10px;
+    display: flex; align-items: center; gap: 8px;
+    min-height: 28px; max-height: 200px; flex-shrink: 0;
+    overflow: hidden;
+  }
+  #conflictbar.open { max-height: 200px; overflow-y: auto; padding: 6px 10px; }
+  #conflictbar .header { cursor: pointer; user-select: none; display: flex; gap: 8px; align-items: center; }
+  #conflictbar .item { font-size: 12px; padding: 3px 0; }
+  #conflictbar .item .kind { color: #d99; font-weight: 600; margin-right: 6px; }
+
+  #trackHeaders {
+    background: #14171d; border-right: 1px solid #232733;
+    overflow-y: auto; overflow-x: hidden;
+    position: relative;
+  }
+  #trackHeaders .scrollwrap { position: relative; }
+  .track-header {
+    display: flex; align-items: center; gap: 4px;
+    padding: 0 8px;
+    border-bottom: 1px solid #1d2129;
+    font-size: 12px;
+    position: relative;
+  }
+  .track-header .swatch {
+    width: 10px; height: 22px; border-radius: 3px; flex-shrink: 0;
+  }
+  .track-header .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .track-header .name[contenteditable=true] { background: #1b1f29; outline: none; padding: 0 2px; }
+  .track-header .tbtn {
+    background: none; border: 1px solid #2a2f3a; padding: 0 4px;
+    font-size: 10px; line-height: 16px; border-radius: 3px; opacity: 0.6;
+  }
+  .track-header .tbtn.active { opacity: 1; background: #2d6cdf; border-color: #2d6cdf; color: white; }
+  .track-header .tbtn:hover { opacity: 1; }
+  .track-header.muted-track { opacity: 0.4; }
+
+  #timelineWrap {
+    position: relative;
+    overflow-x: hidden; overflow-y: auto;
+    background: #0f1115;
+    user-select: none;
+  }
+  #timelineSvg { display: block; cursor: grab; }
+  #timelineSvg.panning { cursor: grabbing; }
+  #timelineSvg.dragging { cursor: ew-resize; }
+
+  #ruler {
+    grid-column: 2 / 3;
+    background: #14171d; border-top: 1px solid #232733;
+    overflow: hidden; position: relative;
+  }
+  #rulerSvg { display: block; }
+  #rulerCorner {
+    background: #14171d; border-top: 1px solid #232733; border-right: 1px solid #232733;
+  }
+
+  #balance {
+    grid-column: 1 / -1;
+    background: #14171d; border-top: 1px solid #232733;
+    display: flex; align-items: stretch;
+  }
+  #balanceLabel {
+    width: 180px; padding: 0 8px; display: flex; align-items: center;
+    font-size: 11px; color: #8a93a3; text-transform: uppercase; letter-spacing: 0.6px;
+    border-right: 1px solid #232733;
+  }
+  #balanceSvgWrap { flex: 1; overflow: hidden; }
+
+  /* drawers + modals */
+  .drawer {
+    position: fixed; top: 0; right: 0; bottom: 0;
+    width: 380px; max-width: 90vw;
+    background: #14171d; border-left: 1px solid #232733;
+    display: flex; flex-direction: column;
+    transform: translateX(100%); transition: transform 180ms ease;
+    z-index: 50;
+  }
+  .drawer.open { transform: translateX(0); }
+  .drawer .drawer-head {
+    padding: 10px 12px; border-bottom: 1px solid #232733;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .drawer .drawer-body { flex: 1; overflow-y: auto; padding: 10px 12px; }
+  .drawer .drawer-foot { padding: 10px 12px; border-top: 1px solid #232733; display: flex; gap: 6px; }
+
+  /* composer */
+  #composer .chat {
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  #composer .msg { padding: 8px 10px; border-radius: 8px; max-width: 100%; word-wrap: break-word; white-space: pre-wrap; }
+  #composer .msg.user { background: #1f2a3b; align-self: flex-end; max-width: 85%; }
+  #composer .msg.assistant { background: #1b1f29; align-self: flex-start; max-width: 95%; }
+  #composer .msg.error { background: #3a1f24; color: #f3c1c1; align-self: flex-start; }
+  #composer .msg .questions { margin-top: 6px; color: #b9c2d2; font-size: 12px; }
+  #composer .proposal-summary {
+    margin-top: 6px; padding: 6px 8px; background: #131722; border: 1px dashed #3a4252; border-radius: 5px;
+    font-size: 12px;
+  }
+  #composer .proposal-summary .actions { display: flex; gap: 6px; margin-top: 6px; }
+  #composer textarea { width: 100%; min-height: 60px; }
+
+  /* editor */
+  #editor .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+  #editor .field label { font-size: 11px; color: #8a93a3; text-transform: uppercase; letter-spacing: 0.6px; }
+  #editor .field input, #editor .field select, #editor .field textarea { width: 100%; }
+  #editor .field-row { display: flex; gap: 8px; }
+  #editor .field-row .field { flex: 1; }
+
+  /* settings modal */
+  #settingsModal {
+    position: fixed; inset: 0; z-index: 60;
+    background: rgba(0,0,0,0.5);
+    display: none; align-items: center; justify-content: center;
+  }
+  #settingsModal.open { display: flex; }
+  #settingsModal .panel {
+    width: 460px; max-width: 90vw;
+    background: #14171d; border: 1px solid #232733; border-radius: 8px;
+    display: flex; flex-direction: column;
+  }
+  #settingsModal .panel-head { padding: 10px 12px; border-bottom: 1px solid #232733; display: flex; align-items: center; justify-content: space-between; }
+  #settingsModal .panel-body { padding: 12px; }
+  #settingsModal .panel-foot { padding: 10px 12px; border-top: 1px solid #232733; display: flex; justify-content: flex-end; gap: 6px; }
+
+  /* empty state */
+  #emptyState {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    pointer-events: none;
+  }
+  #emptyState .card {
+    pointer-events: auto;
+    background: #161a22; border: 1px solid #232733; border-radius: 8px;
+    padding: 20px 24px; max-width: 460px; text-align: center;
+  }
+  #emptyState h2 { margin: 0 0 8px; font-size: 16px; }
+  #emptyState p { color: #8a93a3; margin: 6px 0; font-size: 13px; }
+  #emptyState .row { justify-content: center; margin-top: 10px; }
+
+  /* clip svg styles */
+  .clip-body { cursor: grab; }
+  .clip-body.dragging { cursor: grabbing; }
+  .clip-handle { cursor: ew-resize; }
+  .clip-ghost { opacity: 0.55; }
+  .clip-done text { text-decoration: line-through; opacity: 0.7; }
+  .ghost-actions { font-size: 11px; }
+  .ghost-actions text { cursor: pointer; }
+
+  /* misc */
+  .pill { display: inline-block; padding: 1px 6px; border-radius: 10px; background: #2a2f3a; font-size: 11px; }
+  .hidden { display: none !important; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #2a2f3a; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #3a4150; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <div class="title">Lifetracks</div>
+    <button id="addTrackBtn" title="New track (T)">+ Track</button>
+    <button id="addClipBtn" title="New clip (N)">+ Clip</button>
+    <button id="composerBtn" title="Open AI Composer">💬 Composer</button>
+    <div class="grow"></div>
+    <span class="muted" id="zoomLabel" style="margin-right:4px"></span>
+    <button id="zoomOutBtn" title="Zoom out">−</button>
+    <button id="zoomInBtn" title="Zoom in">+</button>
+    <button id="todayBtn" title="Jump to now (Space)">Today</button>
+    <button id="fitAllBtn" title="Fit all non-done clips in view">Fit all</button>
+    <div class="grow" style="max-width:12px"></div>
+    <button id="exportBtn" title="Export JSON">Export</button>
+    <button id="importBtn" title="Import JSON">Import</button>
+    <button id="settingsBtn" title="Settings">⚙</button>
+    <input id="importFile" type="file" accept=".json,application/json" style="display:none">
+  </div>
+
+  <div id="upnext">
+    <span class="lbl">Up Next</span>
+    <span id="upnextItems" style="display:flex;gap:8px"></span>
+  </div>
+
+  <div id="conflictbar">
+    <div class="header" id="conflictHeader">
+      <span id="conflictCount" class="pill">0</span>
+      <span>Conflicts</span>
+      <span class="muted" id="conflictHint">— none</span>
+      <span class="grow" style="flex:1"></span>
+      <button id="discussConflictsBtn" style="font-size:11px;padding:2px 6px">Discuss with Composer</button>
+      <span id="conflictToggle" style="margin-left:6px">▾</span>
+    </div>
+    <div id="conflictList" style="margin-top:4px"></div>
+  </div>
+
+  <div id="trackHeaders">
+    <div class="scrollwrap" id="trackHeadersInner"></div>
+  </div>
+
+  <div id="timelineWrap">
+    <svg id="timelineSvg"></svg>
+    <div id="emptyState" class="hidden">
+      <div class="card">
+        <h2>Welcome to your Lifetracks</h2>
+        <p>Tell the Composer one thing you want — or add a clip manually.</p>
+        <p class="muted">No API key? You can build the whole roadmap by hand. Add tracks and clips from the toolbar.</p>
+        <div class="row">
+          <button id="emptyComposer" class="btn-primary">💬 Open Composer</button>
+          <button id="emptyTrack">+ Add a track</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="rulerCorner"></div>
+  <div id="ruler"><svg id="rulerSvg"></svg></div>
+
+  <div id="balance">
+    <div id="balanceLabel">Balance Meter</div>
+    <div id="balanceSvgWrap"><svg id="balanceSvg"></svg></div>
+  </div>
+</div>
+
+<!-- Composer drawer -->
+<div id="composer" class="drawer">
+  <div class="drawer-head">
+    <strong>AI Composer</strong>
+    <button id="composerClose">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div id="composerChat" class="chat"></div>
+  </div>
+  <div class="drawer-foot col">
+    <textarea id="composerInput" placeholder="e.g. I'm about to become a father — map out the next nine months."></textarea>
+    <div class="row">
+      <button id="composerSend" class="btn-primary">Send</button>
+      <button id="composerClear" title="Clear chat history">Clear</button>
+      <div class="grow" style="flex:1"></div>
+      <span class="muted" id="composerStatus"></span>
+    </div>
+  </div>
+</div>
+
+<!-- Editor drawer -->
+<div id="editor" class="drawer">
+  <div class="drawer-head">
+    <strong id="editorTitle">Edit clip</strong>
+    <button id="editorClose">✕</button>
+  </div>
+  <div class="drawer-body" id="editorBody"></div>
+  <div class="drawer-foot">
+    <button id="editorSave" class="btn-primary">Save</button>
+    <button id="editorDelete" class="btn-danger">Delete</button>
+    <div class="grow" style="flex:1"></div>
+    <button id="editorCancel">Cancel</button>
+  </div>
+</div>
+
+<!-- Settings modal -->
+<div id="settingsModal">
+  <div class="panel">
+    <div class="panel-head"><strong>Settings</strong><button id="settingsClose">✕</button></div>
+    <div class="panel-body col">
+      <div class="col">
+        <label>Anthropic API key <span class="muted">(local-only — stored in this browser's localStorage. Required only for the Composer.)</span></label>
+        <input id="settingApiKey" type="password" placeholder="sk-ant-...">
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1">
+          <label>Horizon (years)</label>
+          <input id="settingHorizon" type="number" min="1" max="50" step="1">
+        </div>
+        <div class="col" style="flex:1">
+          <label>Weekly capacity</label>
+          <input id="settingCapacity" type="number" min="0.1" max="3" step="0.1">
+        </div>
+        <div class="col" style="flex:1">
+          <label>Lookahead (days)</label>
+          <input id="settingLookahead" type="number" min="1" max="365" step="1">
+        </div>
+      </div>
+      <div class="col">
+        <label>Danger zone</label>
+        <div class="row">
+          <button id="resetAll" class="btn-danger">Erase all data</button>
+        </div>
+      </div>
+    </div>
+    <div class="panel-foot">
+      <button id="settingsCancel">Cancel</button>
+      <button id="settingsSave" class="btn-primary">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ============================================================================
+   Lifetracks — implementation of /Users/nggadmin/projects/lifetracks/lifetracks-spec.md
+   Single-file, local-first, vanilla JS. Rendering uses SVG for both timeline
+   and ruler (chosen over Canvas — 200 clips fits comfortably, and SVG makes
+   drag/resize/dependency-arrow event handling much simpler than canvas hit
+   testing would).  Pan is virtualized: the SVG is the size of the viewport,
+   not the world, so very deep zooms stay smooth.
+   ============================================================================ */
+
+/* ---------------------------------------------------------------- constants */
+const STATE_KEY = "lifetracks.v2";
+const ORIGIN_DATE = "2020-01-01";    // world coordinate zero (arbitrary, well before any real plan)
+// Sub-lane layout — each track stacks: milestone row (thin) | goals/events lanes | recurring lanes.
+const LANE_HEIGHT = 48;              // height of one goal/event/recurring sub-lane
+const MILESTONE_LANE_HEIGHT = 20;    // the thin top row for milestones
+const COLLAPSED_TRACK_HEIGHT = 24;   // collapsed track: clips reduced to dots/thin bars
+const MIN_TRACK_HEIGHT = LANE_HEIGHT;
+// Threshold below which event/milestone text labels are suppressed (kept on hover via <title>)
+const LABEL_VISIBLE_PX_PER_DAY = 8;
+// Milestones within this pixel distance cluster into a single ◆ N badge
+const MILESTONE_CLUSTER_PX = 24;
+const RULER_HEIGHT = 28;
+const PX_PER_DAY_MIN = 0.25;
+const PX_PER_DAY_MAX = 40;
+const DEFAULT_PX_PER_DAY = 4;
+const PALETTE = [
+  "#5b8def","#e07a5f","#81b29a","#f2cc8f","#c89cd1",
+  "#7cd3c4","#f4a261","#d195c4","#a3c4f3","#bcd979"
+];
+
+/* ---------------------------------------------------------- state & schema */
+function defaultState() {
+  return {
+    version: 2,
+    settings: { apiKey: null, horizonYears: 5, weeklyCapacity: 1.0, lookaheadDays: 14 },
+    tracks: [],
+    clips: [],
+    chat: []
+  };
+}
+
+function migrate(s) {
+  // Forward-compat hook. Today there is only v2 — but if older shapes ever
+  // appear, fold them up here before the rest of the app touches them.
+  if (!s || typeof s !== "object") return defaultState();
+  if (!s.version) s.version = 2;
+  // Backfill any missing top-level fields, in case localStorage was hand-edited.
+  const d = defaultState();
+  for (const k of Object.keys(d)) if (!(k in s)) s[k] = d[k];
+  s.settings = Object.assign({}, d.settings, s.settings || {});
+  s.tracks = Array.isArray(s.tracks) ? s.tracks : [];
+  s.clips  = Array.isArray(s.clips)  ? s.clips  : [];
+  s.chat   = Array.isArray(s.chat)   ? s.chat   : [];
+  // v2.1: backfill `collapsed` flag on tracks so old saved sessions survive the upgrade.
+  for (const t of s.tracks) if (typeof t.collapsed !== "boolean") t.collapsed = false;
+  return s;
+}
+
+let state = (() => {
+  try {
+    const raw = localStorage.getItem(STATE_KEY);
+    if (raw) return migrate(JSON.parse(raw));
+  } catch (e) { console.warn("state load failed:", e); }
+  return defaultState();
+})();
+
+let saveTimer = null;
+function saveState() {
+  if (saveTimer) cancelAnimationFrame(saveTimer);
+  saveTimer = requestAnimationFrame(() => {
+    try { localStorage.setItem(STATE_KEY, JSON.stringify(state)); }
+    catch (e) { console.warn("state save failed:", e); }
+  });
+}
+
+function uid() {
+  return Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 6);
+}
+
+/* ----------------------------------------------------------- date helpers */
+function parseDate(s) {
+  if (s instanceof Date) return new Date(s.getTime());
+  if (!s) return null;
+  // Treat the bare date string as a *local* date at midnight. Using "T00:00:00"
+  // (without "Z") keeps the timeline consistent with the user's clock.
+  return new Date(s + "T00:00:00");
+}
+function fmtDate(d) {
+  if (!d) return null;
+  const m = (d.getMonth() + 1).toString().padStart(2, "0");
+  const day = d.getDate().toString().padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+function todayStr() { return fmtDate(new Date()); }
+function daysBetween(a, b) { return (parseDate(b) - parseDate(a)) / 86400000; }
+function addDays(s, n) { const d = parseDate(s); d.setDate(d.getDate() + n); return fmtDate(d); }
+function addMonths(s, n) { const d = parseDate(s); d.setMonth(d.getMonth() + n); return fmtDate(d); }
+function maxDate(a, b) { return parseDate(a) > parseDate(b) ? a : b; }
+function minDate(a, b) { return parseDate(a) < parseDate(b) ? a : b; }
+function monthKey(d) {
+  const dt = parseDate(d);
+  return `${dt.getFullYear()}-${(dt.getMonth()+1).toString().padStart(2,"0")}`;
+}
+function monthsBetween(a, b) {
+  const da = parseDate(a), db = parseDate(b);
+  return (db.getFullYear() - da.getFullYear()) * 12 + (db.getMonth() - da.getMonth());
+}
+function monthRange(startKey, endKey, sortedAll) {
+  // Returns all "YYYY-MM" entries from sortedAll between startKey and endKey inclusive.
+  const out = [];
+  for (const m of sortedAll) if (m >= startKey && m <= endKey) out.push(m);
+  return out;
+}
+
+/* --------------------------------------------------------- view (pan/zoom) */
+let view = { scrollX: 0, pxPerDay: DEFAULT_PX_PER_DAY };
+
+function worldX(dateStr) { return daysBetween(ORIGIN_DATE, dateStr) * view.pxPerDay; }
+function screenX(dateStr) { return worldX(dateStr) - view.scrollX; }
+function screenXToDate(x) {
+  const days = (x + view.scrollX) / view.pxPerDay;
+  const d = parseDate(ORIGIN_DATE); d.setDate(d.getDate() + days);
+  return fmtDate(d);
+}
+
+function viewDateBounds() {
+  const w = document.getElementById("timelineWrap").clientWidth;
+  return { startDate: screenXToDate(0), endDate: screenXToDate(w), width: w };
+}
+
+function centerOn(dateStr) {
+  const w = document.getElementById("timelineWrap").clientWidth;
+  view.scrollX = worldX(dateStr) - w / 2;
+}
+
+function zoomBy(factor, anchorScreenX) {
+  if (anchorScreenX == null) anchorScreenX = document.getElementById("timelineWrap").clientWidth / 2;
+  const anchorWorld = anchorScreenX + view.scrollX;
+  const newPx = Math.max(PX_PER_DAY_MIN, Math.min(PX_PER_DAY_MAX, view.pxPerDay * factor));
+  const scale = newPx / view.pxPerDay;
+  view.pxPerDay = newPx;
+  view.scrollX = anchorWorld * scale - anchorScreenX;
+  render();
+}
+
+/* -------------------------------------------------------- track / clip ops */
+function getTrack(id) { return state.tracks.find(t => t.id === id); }
+function getClip(id)  { return state.clips.find(c => c.id === id); }
+
+function orderedTracks() { return state.tracks.slice().sort((a, b) => a.order - b.order); }
+// A track's "clip-visible" status. Muted = hide clips in that lane; solo = only soloed lanes show clips.
+// Headers and lane *positions* always reflect ALL tracks (so users can un-mute) — only clip rendering is filtered.
+function isTrackActive(t) {
+  const anySolo = state.tracks.some(x => x.soloed);
+  if (anySolo) return !!t.soloed;
+  return !t.muted;
+}
+
+function addTrack(name, color) {
+  const order = state.tracks.length;
+  const t = {
+    id: uid(), name: name || "New Track",
+    color: color || PALETTE[order % PALETTE.length],
+    order, muted: false, soloed: false, collapsed: false, notes: ""
+  };
+  state.tracks.push(t);
+  saveState(); render();
+  return t;
+}
+
+function addClip(partial) {
+  const c = Object.assign({
+    id: uid(),
+    trackId: state.tracks[0] ? state.tracks[0].id : null,
+    kind: "goal",
+    title: "Untitled",
+    notes: "",
+    start: todayStr(),
+    end: null,
+    effort: 3,
+    dependsOn: [],
+    recurrence: null,
+    disruption: null,
+    window: null,
+    status: "planned",
+    source: "manual",
+    aiProposalId: null
+  }, partial || {});
+  if (c.kind === "goal" && !c.end) c.end = addMonths(c.start, 3);
+  if (c.kind === "recurring" && !c.recurrence) c.recurrence = { freq: "weekly", until: addMonths(c.start, 6) };
+  if (c.kind === "event" && !c.disruption) c.disruption = { monthsBefore: 0, monthsAfter: 1, capacityReduction: 0.3 };
+  state.clips.push(c);
+  saveState(); render();
+  return c;
+}
+
+function deleteClip(id) {
+  state.clips = state.clips.filter(c => c.id !== id);
+  // strip dangling dependsOn refs
+  for (const c of state.clips) c.dependsOn = (c.dependsOn || []).filter(d => d !== id);
+  saveState(); render();
+}
+
+function deleteTrack(id) {
+  if (!confirm("Delete this track and all its clips?")) return;
+  state.clips = state.clips.filter(c => c.trackId !== id);
+  state.tracks = state.tracks.filter(t => t.id !== id);
+  state.tracks.forEach((t, i) => t.order = i);
+  saveState(); render();
+}
+
+/* ============================================================================
+   Sequencing engine — deterministic, runs on every state change.
+   Outputs: { order, conflicts, capacityByMonth, effortByTrackByMonth }
+   ============================================================================ */
+function runSequencer() {
+  const conflicts = [];
+
+  // 1. Topological sort of goals/milestones by dependsOn.
+  const graph = new Map();   // id -> Set(dependsOn ids that exist)
+  const nodes = state.clips.filter(c => c.kind === "goal" || c.kind === "milestone");
+  for (const c of nodes) {
+    graph.set(c.id, new Set((c.dependsOn || []).filter(d => state.clips.some(x => x.id === d))));
+  }
+  const order = [];
+  const visiting = new Set(), visited = new Set();
+  let cycleHit = false;
+  function visit(id) {
+    if (cycleHit) return;
+    if (visited.has(id)) return;
+    if (visiting.has(id)) {
+      conflicts.push({ kind: "cycle", clipIds: [id], msg: `Dependency cycle involving "${getClip(id)?.title ?? id}"` });
+      cycleHit = true; return;
+    }
+    visiting.add(id);
+    for (const d of (graph.get(id) || [])) visit(d);
+    visiting.delete(id);
+    visited.add(id);
+    order.push(id);
+  }
+  for (const id of graph.keys()) visit(id);
+
+  // 2. Capacity model per month across the planning horizon.
+  const horizonMonths = (state.settings.horizonYears || 5) * 12;
+  const baseStart = monthKey(todayStr());
+  const baseStartDate = parseDate(todayStr());
+  baseStartDate.setDate(1);
+  const months = [];
+  for (let i = -6; i < horizonMonths; i++) {
+    const d = new Date(baseStartDate); d.setMonth(d.getMonth() + i);
+    months.push(monthKey(fmtDate(d)));
+  }
+
+  // capacity starts at weeklyCapacity (treat as monthly ratio = same number).
+  const capByMonth = new Map(months.map(m => [m, state.settings.weeklyCapacity || 1.0]));
+
+  // Apply event disruption zones — compounding, floored at 0.1.
+  for (const ev of state.clips.filter(c => c.kind === "event" && c.disruption && c.status !== "skipped")) {
+    const start = addMonths(ev.start, -(ev.disruption.monthsBefore || 0));
+    const end   = addMonths(ev.start,  (ev.disruption.monthsAfter  || 0));
+    const r = Math.max(0, Math.min(1, ev.disruption.capacityReduction || 0));
+    for (const m of months) {
+      const md = m + "-15";
+      if (parseDate(md) >= parseDate(start) && parseDate(md) <= parseDate(end)) {
+        const cur = capByMonth.get(m);
+        capByMonth.set(m, Math.max(0.1, cur * (1 - r)));
+      }
+    }
+  }
+
+  // Effort per track per month
+  const effortByTrackByMonth = new Map();
+  function addEffort(trackId, mKey, amount) {
+    if (!effortByTrackByMonth.has(trackId)) effortByTrackByMonth.set(trackId, new Map());
+    const inner = effortByTrackByMonth.get(trackId);
+    inner.set(mKey, (inner.get(mKey) || 0) + amount);
+  }
+
+  for (const c of state.clips) {
+    if (c.status === "done" || c.status === "skipped") continue;
+    const e = Math.max(1, Math.min(5, c.effort || 1));
+    if (c.kind === "goal") {
+      const s = c.start, en = c.end || c.start;
+      const perMonth = e / 5;
+      const startD = parseDate(s), endD = parseDate(en);
+      for (const m of months) {
+        const md0 = parseDate(m + "-01");
+        const md1 = parseDate(addMonths(m + "-01", 1));
+        if (md1 <= startD) continue;
+        if (md0 >= endD) continue;
+        addEffort(c.trackId, m, perMonth);
+      }
+    } else if (c.kind === "recurring" && c.recurrence) {
+      // v2.1: recurring is effort/15 (was effort/10). Habits are sustained but should leave room
+      // for the sporadic goals that show up on top of them — the prior coefficient pushed three
+      // modest habits + two goals over 1.0 by itself.
+      const perMonth = e / 15;
+      const startD = parseDate(c.start);
+      const until = parseDate(c.recurrence.until || addMonths(c.start, 12));
+      for (const m of months) {
+        const md0 = parseDate(m + "-01");
+        const md1 = parseDate(addMonths(m + "-01", 1));
+        if (md1 <= startD) continue;
+        if (md0 >= until) continue;
+        addEffort(c.trackId, m, perMonth);
+      }
+    }
+  }
+
+  // total monthly load (across tracks)
+  const totalByMonth = new Map(months.map(m => [m, 0]));
+  for (const inner of effortByTrackByMonth.values()) {
+    for (const [m, v] of inner) totalByMonth.set(m, (totalByMonth.get(m) || 0) + v);
+  }
+
+  // 3a. Capacity bands (v2.1):
+  //   ratio ≤ 1.0  → fine, no conflict
+  //   1.0 < r ≤ 1.2 → SNUG ("tight but plausible") — yellow
+  //   r > 1.2      → OVERLOAD — red
+  // Contiguous runs of the same band are collapsed into a single range conflict — e.g.
+  //   "Over capacity Jun '26 – Apr '27 (peak 1.3× in Aug)" — instead of one row per month.
+  const sortedMonths = months.slice().sort();
+  function bandFor(ratio) {
+    if (ratio > 1.2) return "overload";
+    if (ratio > 1.0 + 1e-6) return "snug";
+    return null;
+  }
+  let curBand = null, curStart = null, curEnd = null, curPeak = 0, curPeakMonth = null;
+  const runs = [];
+  function flushRun() {
+    if (!curBand) return;
+    runs.push({ band: curBand, start: curStart, end: curEnd, peak: curPeak, peakMonth: curPeakMonth });
+    curBand = null;
+  }
+  for (const m of sortedMonths) {
+    const t = totalByMonth.get(m) || 0;
+    const cap = capByMonth.get(m);
+    const ratio = cap > 0 ? t / cap : 0;
+    const b = bandFor(ratio);
+    if (b !== curBand) {
+      flushRun();
+      if (b) { curBand = b; curStart = m; curEnd = m; curPeak = ratio; curPeakMonth = m; }
+    } else if (b) {
+      curEnd = m;
+      if (ratio > curPeak) { curPeak = ratio; curPeakMonth = m; }
+    }
+  }
+  flushRun();
+  function fmtMonthLabel(m) {
+    const dt = parseDate(m + "-01");
+    return dt.toLocaleString(undefined, { month: "short" }) + " '" + String(dt.getFullYear()).slice(2);
+  }
+  for (const r of runs) {
+    const range = (r.start === r.end) ? fmtMonthLabel(r.start) : `${fmtMonthLabel(r.start)} – ${fmtMonthLabel(r.end)}`;
+    const peak = `peak ${r.peak.toFixed(2)}× in ${fmtMonthLabel(r.peakMonth)}`;
+    if (r.band === "overload") {
+      conflicts.push({
+        kind: "overload", severity: "overload",
+        msg: `Over capacity ${range} (${peak}). Try a defer, a shorter span, or a lower-effort.`,
+        months: monthRange(r.start, r.end, sortedMonths)
+      });
+    } else {
+      conflicts.push({
+        kind: "overload", severity: "snug",
+        msg: `Snug ${range} (${peak}) — tight but plausible. A coach would watch, not panic.`,
+        months: monthRange(r.start, r.end, sortedMonths)
+      });
+    }
+  }
+
+  // 3b. Transition collision: high-effort goal (>=4) intersects an event's disruption zone
+  for (const ev of state.clips.filter(c => c.kind === "event" && c.disruption && c.status !== "skipped")) {
+    const zStart = addMonths(ev.start, -(ev.disruption.monthsBefore || 0));
+    const zEnd   = addMonths(ev.start,  (ev.disruption.monthsAfter  || 0));
+    for (const g of state.clips.filter(c => c.kind === "goal" && (c.effort || 0) >= 4 && c.status !== "skipped" && c.status !== "done")) {
+      if (parseDate(g.start) > parseDate(zEnd)) continue;
+      if (parseDate(g.end || g.start) < parseDate(zStart)) continue;
+      conflicts.push({
+        kind: "transition",
+        clipIds: [g.id, ev.id],
+        msg: `"${g.title}" (effort ${g.effort}) overlaps the disruption zone of "${ev.title}"`
+      });
+    }
+  }
+
+  // 3c. Deadline risk: chain of dependencies + duration won't fit before window.latest
+  for (const c of state.clips) {
+    if (!c.window || !c.window.latest) continue;
+    if (c.status === "done" || c.status === "skipped") continue;
+    const dur = c.end ? daysBetween(c.start, c.end) : 0;
+    let earliest = parseDate(c.start);
+    for (const depId of c.dependsOn || []) {
+      const dep = getClip(depId);
+      if (!dep) continue;
+      const depEnd = parseDate(dep.end || dep.start);
+      if (depEnd > earliest) earliest = depEnd;
+    }
+    const finish = new Date(earliest.getTime() + dur * 86400000);
+    if (finish > parseDate(c.window.latest)) {
+      conflicts.push({
+        kind: "deadline",
+        clipIds: [c.id],
+        msg: `"${c.title}" can't finish by ${c.window.latest} given dependencies and duration`
+      });
+    }
+  }
+
+  // 3d. Silent track: no planned/active clip in next 12 months
+  const horizon12 = addMonths(todayStr(), 12);
+  for (const t of state.tracks) {
+    if (t.muted) continue;
+    const has = state.clips.some(c =>
+      c.trackId === t.id &&
+      (c.status === "planned" || c.status === "active") &&
+      parseDate(c.start) <= parseDate(horizon12) &&
+      parseDate(c.end || c.start) >= parseDate(todayStr())
+    );
+    if (!has) conflicts.push({ kind: "silent", trackId: t.id, msg: `Track "${t.name}" has nothing planned in the next 12 months` });
+  }
+
+  return { order, conflicts, capByMonth, effortByTrackByMonth, totalByMonth, months };
+}
+
+/* ============================================================================
+   Rendering
+   ============================================================================ */
+const svgNS = "http://www.w3.org/2000/svg";
+function el(tag, attrs, ...children) {
+  const e = document.createElementNS(svgNS, tag);
+  if (attrs) for (const k of Object.keys(attrs)) {
+    if (attrs[k] == null) continue;
+    if (k === "text") e.textContent = attrs[k];
+    else e.setAttribute(k, attrs[k]);
+  }
+  for (const c of children) if (c) e.appendChild(c);
+  return e;
+}
+
+let lastSequencerResult = null;
+let lastTrackLayouts = null;     // { layouts: Map<trackId, layout>, totalHeight }
+
+function render() {
+  lastSequencerResult = runSequencer();
+  lastTrackLayouts = computeTrackLayouts();
+  renderTrackHeaders();
+  renderTimeline();
+  renderRuler();
+  renderBalance();
+  renderUpNext();
+  renderConflicts();
+  renderZoomLabel();
+  renderEmptyState();
+}
+
+/* ============================================================================
+   Sub-lane layout (v2.1): each track gets a thin milestone row on top (if any
+   milestones), then a stack of goal/event sub-lanes, then a stack of recurring
+   sub-lanes. Sub-lanes are assigned by a greedy interval-packing algorithm
+   over the clips' *visual* intervals — goals/recurring use [start, end/until],
+   events use their disruption span (the wider footprint), milestones use a
+   small label-width interval (no need to pack — they share one thin row).
+   ============================================================================ */
+function getVisualInterval(c) {
+  if (c.kind === "goal") return { start: c.start, end: c.end || c.start };
+  if (c.kind === "recurring") {
+    return { start: c.start, end: (c.recurrence && c.recurrence.until) || addMonths(c.start, 6) };
+  }
+  if (c.kind === "event") {
+    if (c.disruption) {
+      return {
+        start: addMonths(c.start, -(c.disruption.monthsBefore || 0)),
+        end:   addMonths(c.start,  (c.disruption.monthsAfter  || 0))
+      };
+    }
+    return { start: c.start, end: c.start };
+  }
+  return { start: c.start, end: c.start };
+}
+
+function packIntoLanes(clips) {
+  const sorted = clips.slice().sort((a, b) => parseDate(getVisualInterval(a).start) - parseDate(getVisualInterval(b).start));
+  const laneEnds = []; // ISO date when each lane's last occupant ends
+  const assignments = new Map();
+  for (const c of sorted) {
+    const iv = getVisualInterval(c);
+    let placed = -1;
+    for (let i = 0; i < laneEnds.length; i++) {
+      if (parseDate(laneEnds[i]) <= parseDate(iv.start)) { placed = i; break; }
+    }
+    if (placed === -1) { laneEnds.push(iv.end); placed = laneEnds.length - 1; }
+    else laneEnds[placed] = iv.end;
+    assignments.set(c.id, placed);
+  }
+  return { laneCount: laneEnds.length, assignments };
+}
+
+function computeTrackLayouts() {
+  const layouts = new Map();
+  let yCursor = 0;
+  for (const track of orderedTracks()) {
+    const all = state.clips.filter(c => c.trackId === track.id);
+    const milestones    = all.filter(c => c.kind === "milestone");
+    const goalsAndEvents= all.filter(c => c.kind === "goal" || c.kind === "event");
+    const recurring     = all.filter(c => c.kind === "recurring");
+
+    if (track.collapsed) {
+      layouts.set(track.id, {
+        yStart: yCursor, height: COLLAPSED_TRACK_HEIGHT, collapsed: true,
+        milestoneLaneY: null,
+        goalLaneStartY: yCursor, goalLaneCount: 0, goalAssignments: new Map(),
+        recurringLaneStartY: yCursor, recurringLaneCount: 0, recurringAssignments: new Map()
+      });
+      yCursor += COLLAPSED_TRACK_HEIGHT;
+      continue;
+    }
+
+    let inner = 0;
+    let milestoneLaneY = null;
+    if (milestones.length) {
+      milestoneLaneY = yCursor + inner;
+      inner += MILESTONE_LANE_HEIGHT;
+    }
+
+    const goalPack = packIntoLanes(goalsAndEvents);
+    const goalLaneStartY = yCursor + inner;
+    const goalLanes = Math.max(goalsAndEvents.length ? 1 : 0, goalPack.laneCount);
+    inner += goalLanes * LANE_HEIGHT;
+
+    const recPack = packIntoLanes(recurring);
+    const recurringLaneStartY = yCursor + inner;
+    const recurringLanes = recPack.laneCount;
+    inner += recurringLanes * LANE_HEIGHT;
+
+    // Empty track still gets one lane of room so its header isn't shorter than the swatch.
+    const height = Math.max(MIN_TRACK_HEIGHT, inner);
+
+    layouts.set(track.id, {
+      yStart: yCursor, height, collapsed: false,
+      milestoneLaneY,
+      goalLaneStartY, goalLaneCount: goalLanes, goalAssignments: goalPack.assignments,
+      recurringLaneStartY, recurringLaneCount: recurringLanes, recurringAssignments: recPack.assignments
+    });
+    yCursor += height;
+  }
+  return { layouts, totalHeight: yCursor };
+}
+
+function clipPosition(c) {
+  // Returns { x, y, w, h, cx, cy } for any clip, given current layouts + view scroll.
+  const lay = lastTrackLayouts.layouts.get(c.trackId);
+  if (!lay) return null;
+  if (lay.collapsed) {
+    // collapsed track: clips collapse to short bars in a single thin lane
+    const x = screenX(c.start);
+    const w = c.kind === "goal" ? Math.max(2, screenX(c.end || c.start) - x)
+            : c.kind === "recurring" ? Math.max(2, screenX(c.recurrence?.until || c.start) - x)
+            : 4;
+    const h = COLLAPSED_TRACK_HEIGHT - 8;
+    const y = lay.yStart + 4;
+    return { x, y, w, h, cx: x + w / 2, cy: y + h / 2, collapsed: true };
+  }
+  if (c.kind === "milestone") {
+    const y = (lay.milestoneLaneY ?? lay.goalLaneStartY);
+    const x = screenX(c.start);
+    return { x, y, w: 14, h: MILESTONE_LANE_HEIGHT, cx: x, cy: y + MILESTONE_LANE_HEIGHT / 2 };
+  }
+  if (c.kind === "recurring") {
+    const sub = lay.recurringAssignments.get(c.id) ?? 0;
+    const y = lay.recurringLaneStartY + sub * LANE_HEIGHT;
+    const x = screenX(c.start);
+    const w = Math.max(8, screenX(c.recurrence?.until || addMonths(c.start, 6)) - x);
+    return { x, y, w, h: LANE_HEIGHT, cx: x + w / 2, cy: y + LANE_HEIGHT / 2 };
+  }
+  // goal or event share the goal/event lane stack
+  const sub = lay.goalAssignments.get(c.id) ?? 0;
+  const y = lay.goalLaneStartY + sub * LANE_HEIGHT;
+  const x = screenX(c.start);
+  const w = c.kind === "goal"
+    ? Math.max(8, screenX(c.end || c.start) - x)
+    : 20;
+  return { x, y, w, h: LANE_HEIGHT, cx: x + w / 2, cy: y + LANE_HEIGHT / 2 };
+}
+
+function renderEmptyState() {
+  const empty = state.tracks.length === 0 && state.clips.length === 0;
+  document.getElementById("emptyState").classList.toggle("hidden", !empty);
+}
+
+function renderZoomLabel() {
+  const px = view.pxPerDay;
+  let scale;
+  if (px < 0.6) scale = "decade";
+  else if (px < 2) scale = "year";
+  else if (px < 8) scale = "quarter";
+  else if (px < 22) scale = "month";
+  else scale = "week";
+  document.getElementById("zoomLabel").textContent = `zoom: ${scale}`;
+}
+
+/* -------- track headers -------- */
+function renderTrackHeaders() {
+  const wrap = document.getElementById("trackHeadersInner");
+  wrap.innerHTML = "";
+  // The inner div takes the *full* content height so vertical scrolling can be synced with the
+  // timelineWrap (which has overflow-y: auto and an SVG sized to the same content height).
+  const total = lastTrackLayouts ? lastTrackLayouts.totalHeight : 0;
+  wrap.style.height = total + "px";
+  for (const t of orderedTracks()) {
+    const lay = lastTrackLayouts.layouts.get(t.id);
+    const div = document.createElement("div");
+    div.className = "track-header" + (t.muted ? " muted-track" : "") + (t.collapsed ? " collapsed-track" : "");
+    div.style.height = lay.height + "px";
+    div.dataset.trackId = t.id;
+
+    const swatch = document.createElement("div");
+    swatch.className = "swatch";
+    swatch.style.background = t.color;
+    swatch.title = "Click to recolor";
+    swatch.onclick = (e) => {
+      e.stopPropagation();
+      const idx = PALETTE.indexOf(t.color);
+      t.color = PALETTE[(idx + 1) % PALETTE.length];
+      saveState(); render();
+    };
+
+    const name = document.createElement("div");
+    name.className = "name";
+    name.textContent = t.name;
+    name.title = "Double-click to rename";
+    name.ondblclick = () => {
+      name.contentEditable = "true";
+      name.focus();
+      const r = document.createRange();
+      r.selectNodeContents(name);
+      const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+    };
+    name.onblur = () => {
+      name.contentEditable = "false";
+      t.name = name.textContent.trim() || "Untitled";
+      saveState(); render();
+    };
+    name.onkeydown = (e) => {
+      if (e.key === "Enter") { e.preventDefault(); name.blur(); }
+      if (e.key === "Escape") { name.textContent = t.name; name.blur(); }
+    };
+
+    const cBtn = document.createElement("button");
+    cBtn.className = "tbtn" + (t.collapsed ? " active" : "");
+    cBtn.textContent = t.collapsed ? "▸" : "▾";
+    cBtn.title = t.collapsed ? "Expand" : "Collapse";
+    cBtn.onclick = () => { t.collapsed = !t.collapsed; saveState(); render(); };
+
+    const sBtn = document.createElement("button");
+    sBtn.className = "tbtn" + (t.soloed ? " active" : "");
+    sBtn.textContent = "S"; sBtn.title = "Solo";
+    sBtn.onclick = () => { t.soloed = !t.soloed; saveState(); render(); };
+
+    const mBtn = document.createElement("button");
+    mBtn.className = "tbtn" + (t.muted ? " active" : "");
+    mBtn.textContent = "M"; mBtn.title = "Mute (hide)";
+    mBtn.onclick = () => { t.muted = !t.muted; saveState(); render(); };
+
+    const xBtn = document.createElement("button");
+    xBtn.className = "tbtn"; xBtn.textContent = "×"; xBtn.title = "Delete track";
+    xBtn.onclick = () => deleteTrack(t.id);
+
+    div.append(swatch, name, cBtn, sBtn, mBtn, xBtn);
+    wrap.appendChild(div);
+  }
+}
+
+/* -------- main timeline -------- */
+function renderTimeline() {
+  const wrap = document.getElementById("timelineWrap");
+  const svg = document.getElementById("timelineSvg");
+  const w = wrap.clientWidth;
+  const tracks = orderedTracks();
+  const totalH = lastTrackLayouts.totalHeight;
+  const h = Math.max(wrap.clientHeight, totalH);
+  svg.setAttribute("width", w);
+  svg.setAttribute("height", h);
+  svg.innerHTML = "";
+
+  // background grid lines aligned with ruler ticks
+  const ticks = computeRulerTicks();
+  for (const t of ticks.minor) {
+    const x = screenX(t.date);
+    if (x < -2 || x > w + 2) continue;
+    svg.appendChild(el("line", { x1: x, x2: x, y1: 0, y2: h, stroke: "#1a1d24", "stroke-width": 1 }));
+  }
+  for (const t of ticks.major) {
+    const x = screenX(t.date);
+    if (x < -2 || x > w + 2) continue;
+    svg.appendChild(el("line", { x1: x, x2: x, y1: 0, y2: h, stroke: "#272c36", "stroke-width": 1 }));
+  }
+
+  // track separators and muted shading — using cumulative y from layouts
+  for (const t of tracks) {
+    const lay = lastTrackLayouts.layouts.get(t.id);
+    if (!isTrackActive(t)) {
+      svg.appendChild(el("rect", { x: 0, y: lay.yStart, width: w, height: lay.height, fill: "#0a0c10", "fill-opacity": 0.55 }));
+    }
+    svg.appendChild(el("line", { x1: 0, x2: w, y1: lay.yStart, y2: lay.yStart, stroke: "#1d2129" }));
+  }
+  // final bottom border
+  svg.appendChild(el("line", { x1: 0, x2: w, y1: totalH, y2: totalH, stroke: "#1d2129" }));
+
+  // event disruption zones — span the whole owning track's height
+  for (const c of state.clips) {
+    if (c.kind !== "event" || !c.disruption) continue;
+    const lay = lastTrackLayouts.layouts.get(c.trackId);
+    if (!lay) continue;
+    if (!isTrackActive(getTrack(c.trackId))) continue;
+    const zStart = addMonths(c.start, -(c.disruption.monthsBefore || 0));
+    const zEnd   = addMonths(c.start,  (c.disruption.monthsAfter  || 0));
+    const x0 = screenX(zStart), x1 = screenX(zEnd);
+    if (x1 < 0 || x0 > w) continue;
+    const isGhost = c.source === "ai" && c.aiProposalId;
+    svg.appendChild(el("rect", {
+      x: x0, y: lay.yStart + 2, width: Math.max(1, x1 - x0), height: lay.height - 4,
+      fill: getTrack(c.trackId)?.color || "#888", "fill-opacity": isGhost ? 0.06 : 0.10,
+      stroke: "none"
+    }));
+  }
+
+  // dependency arrows — from source clip center to target clip center
+  for (const c of state.clips) {
+    if (!c.dependsOn || !c.dependsOn.length) continue;
+    if (!isTrackActive(getTrack(c.trackId))) continue;
+    const target = clipPosition(c);
+    if (!target) continue;
+    for (const depId of c.dependsOn) {
+      const dep = getClip(depId);
+      if (!dep) continue;
+      if (!isTrackActive(getTrack(dep.trackId))) continue;
+      const source = clipPosition(dep);
+      if (!source) continue;
+      const x0 = source.x + source.w;
+      const y0 = source.cy;
+      const x1 = target.x;
+      const y1 = target.cy;
+      if (Math.max(x0, x1) < 0 || Math.min(x0, x1) > w) continue;
+      svg.appendChild(el("path", {
+        d: `M${x0},${y0} C${x0 + 30},${y0} ${x1 - 30},${y1} ${x1},${y1}`,
+        fill: "none", stroke: "#5a6478", "stroke-width": 1, "stroke-dasharray": "3 3"
+      }));
+    }
+  }
+
+  // ---- clips ----
+  // We render per-track so we can do milestone clustering per-track and choose collapsed glyphs.
+  // Labels are laid out left-to-right with an "occupied" cursor per sub-lane to prevent any
+  // two rendered labels from overlapping (P0-2: "No two rendered labels may overlap").
+  for (const t of tracks) {
+    if (!isTrackActive(t)) continue;
+    const lay = lastTrackLayouts.layouts.get(t.id);
+    const color = t.color || "#888";
+
+    if (lay.collapsed) {
+      for (const c of state.clips.filter(c => c.trackId === t.id)) {
+        const node = renderCollapsedClip(c, lay, color, w);
+        if (node) svg.appendChild(node);
+      }
+      continue;
+    }
+
+    // ---- milestones (clustered) ----
+    const milestones = state.clips.filter(c => c.trackId === t.id && c.kind === "milestone");
+    if (milestones.length && lay.milestoneLaneY != null) {
+      const clusters = clusterMilestones(milestones, w);
+      for (const cluster of clusters) {
+        if (cluster.x < -20 || cluster.x > w + 20) continue;
+        if (cluster.clips.length === 1) {
+          const node = renderMilestone(cluster.clips[0], cluster.x, lay.milestoneLaneY, color, w);
+          if (node) svg.appendChild(node);
+        } else {
+          // Cluster badge: ◆ N — clickable to zoom into the cluster span
+          const g = el("g", { class: "clip", "data-cluster": "1" });
+          g.appendChild(el("path", {
+            d: `M${cluster.x},${lay.milestoneLaneY + 4} L${cluster.x + 8},${lay.milestoneLaneY + 10} L${cluster.x},${lay.milestoneLaneY + 16} L${cluster.x - 8},${lay.milestoneLaneY + 10} Z`,
+            fill: color, stroke: "rgba(0,0,0,0.4)"
+          }));
+          const tx = el("text", {
+            x: cluster.x + 12, y: lay.milestoneLaneY + 14,
+            fill: "#e7e9ec", "font-size": 11, "pointer-events": "none"
+          });
+          tx.textContent = `◆ ${cluster.clips.length}`;
+          g.appendChild(tx);
+          const ttl = el("title");
+          ttl.textContent = cluster.clips.map(c => `${c.start}  ${c.title}`).join("\n");
+          g.appendChild(ttl);
+          g.style.cursor = "zoom-in";
+          g.onclick = () => zoomToRange(cluster.clips[0].start, cluster.clips[cluster.clips.length - 1].start);
+          svg.appendChild(g);
+        }
+      }
+    }
+
+    // ---- goals + events ----
+    const labelCursors = new Array(lay.goalLaneCount).fill(-Infinity); // per sub-lane "next x where a label may start"
+    const recurCursors = new Array(lay.recurringLaneCount).fill(-Infinity);
+    const goalsAndEvents = state.clips.filter(c => c.trackId === t.id && (c.kind === "goal" || c.kind === "event"));
+    goalsAndEvents.sort((a, b) => parseDate(a.start) - parseDate(b.start));
+    for (const c of goalsAndEvents) {
+      const sub = lay.goalAssignments.get(c.id) ?? 0;
+      const top = lay.goalLaneStartY + sub * LANE_HEIGHT;
+      const node = renderClip(c, top, LANE_HEIGHT, color, w, labelCursors, sub);
+      if (node) svg.appendChild(node);
+    }
+
+    // ---- recurring ----
+    const recurring = state.clips.filter(c => c.trackId === t.id && c.kind === "recurring");
+    recurring.sort((a, b) => parseDate(a.start) - parseDate(b.start));
+    for (const c of recurring) {
+      const sub = lay.recurringAssignments.get(c.id) ?? 0;
+      const top = lay.recurringLaneStartY + sub * LANE_HEIGHT;
+      const node = renderClip(c, top, LANE_HEIGHT, color, w, recurCursors, sub);
+      if (node) svg.appendChild(node);
+    }
+  }
+
+  // playhead
+  const px = screenX(todayStr());
+  if (px >= 0 && px <= w) {
+    svg.appendChild(el("line", { x1: px, x2: px, y1: 0, y2: h, stroke: "#e94c4c", "stroke-width": 2 }));
+    svg.appendChild(el("polygon", { points: `${px-5},0 ${px+5},0 ${px},8`, fill: "#e94c4c" }));
+  }
+}
+
+// Cluster milestones whose screen-x positions fall within MILESTONE_CLUSTER_PX of one another.
+function clusterMilestones(milestones, viewportW) {
+  const sorted = milestones.slice().sort((a, b) => parseDate(a.start) - parseDate(b.start));
+  const clusters = [];
+  let curr = null;
+  for (const m of sorted) {
+    const x = screenX(m.start);
+    if (!curr || (x - curr.lastX) > MILESTONE_CLUSTER_PX) {
+      curr = { x, lastX: x, clips: [m] };
+      clusters.push(curr);
+    } else {
+      curr.clips.push(m);
+      curr.lastX = x;
+      curr.x = (curr.x + x) / 2;   // visual midpoint of the cluster
+    }
+  }
+  return clusters;
+}
+
+function zoomToRange(startStr, endStr) {
+  const start = parseDate(startStr);
+  const end = parseDate(endStr || startStr);
+  const days = Math.max(7, (end - start) / 86400000 + 60);  // pad 30 days each side
+  const w = document.getElementById("timelineWrap").clientWidth;
+  const newPx = Math.max(PX_PER_DAY_MIN, Math.min(PX_PER_DAY_MAX, w / days));
+  view.pxPerDay = newPx;
+  const midStr = fmtDate(new Date((start.getTime() + end.getTime()) / 2));
+  centerOn(midStr);
+  render();
+}
+
+// Per-track milestone draw — a single-clip flag.
+function renderMilestone(c, x, laneY, color, viewportW) {
+  const isGhost = c.source === "ai" && c.aiProposalId;
+  const isDone = c.status === "done";
+  const g = el("g", { "data-clip-id": c.id, class: "clip" + (isGhost ? " clip-ghost" : "") + (isDone ? " clip-done" : "") });
+  g.appendChild(el("path", {
+    class: "clip-body",
+    d: `M${x},${laneY + 2} L${x + 10},${laneY + 7} L${x},${laneY + 12} Z M${x},${laneY + 2} L${x},${laneY + MILESTONE_LANE_HEIGHT - 2}`,
+    stroke: color, "stroke-width": 2, fill: color, "fill-opacity": isDone ? 0.4 : 0.9
+  }));
+  const ttl = el("title"); ttl.textContent = `${c.title}\n${c.start}` + (c.notes ? `\n${c.notes}` : "");
+  g.appendChild(ttl);
+  // Show label only at month-level zoom or finer.
+  if (view.pxPerDay >= LABEL_VISIBLE_PX_PER_DAY) {
+    const txt = el("text", { x: x + 14, y: laneY + 13, fill: "#e7e9ec", "font-size": 11, "pointer-events": "none" });
+    txt.textContent = c.title;
+    g.appendChild(txt);
+  }
+  if (isGhost) g.appendChild(ghostActions(c, x - 4, laneY));
+  return g;
+}
+
+function renderCollapsedClip(c, lay, color, viewportW) {
+  const pos = clipPosition(c);
+  if (!pos) return null;
+  if (pos.x + pos.w < -2 || pos.x > viewportW + 2) return null;
+  const isGhost = c.source === "ai" && c.aiProposalId;
+  const g = el("g", { "data-clip-id": c.id, class: "clip" + (isGhost ? " clip-ghost" : "") });
+  if (c.kind === "milestone" || c.kind === "event") {
+    g.appendChild(el("circle", { class: "clip-body", cx: pos.cx, cy: pos.cy, r: 3, fill: color }));
+  } else {
+    g.appendChild(el("rect", {
+      class: "clip-body", x: pos.x, y: pos.y, width: Math.max(2, pos.w), height: pos.h,
+      rx: 2, ry: 2, fill: color, "fill-opacity": 0.85
+    }));
+  }
+  const ttl = el("title"); ttl.textContent = c.title; g.appendChild(ttl);
+  return g;
+}
+
+function ghostActions(c, x, y) {
+  const grp = el("g", { class: "ghost-actions" });
+  const ok = el("text", { x: x + 4, y: y + 12, fill: "#7fd47f", "data-action": "accept" }); ok.textContent = "✓";
+  const no = el("text", { x: x + 20, y: y + 12, fill: "#e07c7c", "data-action": "dismiss" }); no.textContent = "✕";
+  grp.appendChild(ok); grp.appendChild(no);
+  return grp;
+}
+
+// Approx text width in px for a 12px font: average glyph ~7px (English text).
+function approxTextWidth(s, fontPx) { return Math.ceil((s || "").length * (fontPx * 0.58)); }
+
+function renderClip(c, top, h, color, viewportW, labelCursors, subLaneIdx) {
+  const isGhost = c.source === "ai" && c.aiProposalId;
+  const isDone = c.status === "done";
+  const isSkipped = c.status === "skipped";
+  const isActive = c.status === "active";
+  const g = el("g", {
+    "data-clip-id": c.id,
+    class: "clip" + (isGhost ? " clip-ghost" : "") + (isDone ? " clip-done" : "")
+  });
+  // Tooltip — always; reveals the full title even when the on-screen label is hidden or truncated.
+  const ttl = el("title"); ttl.textContent = c.title + (c.notes ? `\n${c.notes}` : ""); g.appendChild(ttl);
+
+  const padTop = 4;
+  const barH = h - padTop * 2;
+
+  if (c.kind === "goal") {
+    const x0 = screenX(c.start);
+    const x1 = screenX(c.end || c.start);
+    if (x1 < -2 || x0 > viewportW + 2) return null;
+    const w = Math.max(8, x1 - x0);
+    const rect = el("rect", {
+      class: "clip-body",
+      x: x0, y: top + padTop, width: w, height: barH,
+      rx: 6, ry: 6,
+      fill: color, "fill-opacity": isDone ? 0.35 : (isSkipped ? 0.25 : 0.85),
+      stroke: isActive ? "#fff" : "rgba(0,0,0,0.4)", "stroke-width": isActive ? 2 : 1,
+      "stroke-dasharray": isSkipped ? "4 3" : (isGhost ? "5 3" : null)
+    });
+    g.appendChild(rect);
+    g.appendChild(el("rect", { class: "clip-handle", "data-handle": "L",
+      x: x0, y: top + padTop, width: 6, height: barH, fill: "transparent" }));
+    g.appendChild(el("rect", { class: "clip-handle", "data-handle": "R",
+      x: x0 + w - 6, y: top + padTop, width: 6, height: barH, fill: "transparent" }));
+
+    // Label fit (P0-2): only render if it has room and is past the prior label's right edge.
+    const fullLabel = c.title + (c.effort ? `  ·  e${c.effort}` : "");
+    const fontPx = 12;
+    let labelText = "";
+    if (w >= 60) {
+      const room = w - 16;
+      if (approxTextWidth(fullLabel, fontPx) <= room) {
+        labelText = fullLabel;
+      } else {
+        const maxChars = Math.max(0, Math.floor(room / (fontPx * 0.58)) - 1);
+        if (maxChars > 4) labelText = fullLabel.slice(0, maxChars) + "…";
+      }
+    }
+    if (labelText) {
+      const txtX = x0 + 8;
+      // Don't overlap whatever label already exists in this sub-lane.
+      const cursor = labelCursors[subLaneIdx] ?? -Infinity;
+      if (txtX >= cursor) {
+        const txt = el("text", {
+          x: txtX, y: top + h / 2 + 4,
+          fill: "#0f1115", "font-size": fontPx, "font-weight": 600, "pointer-events": "none"
+        });
+        txt.textContent = labelText;
+        g.appendChild(txt);
+        labelCursors[subLaneIdx] = txtX + approxTextWidth(labelText, fontPx) + 6;
+      }
+    }
+  } else if (c.kind === "event") {
+    const x = screenX(c.start);
+    if (x < -20 || x > viewportW + 20) return null;
+    const cy = top + h / 2;
+    const s = 9;
+    g.appendChild(el("polygon", {
+      class: "clip-body",
+      points: `${x},${cy - s} ${x + s},${cy} ${x},${cy + s} ${x - s},${cy}`,
+      fill: color, "fill-opacity": isDone ? 0.35 : 0.9,
+      stroke: isActive ? "#fff" : "rgba(0,0,0,0.5)", "stroke-width": isActive ? 2 : 1,
+      "stroke-dasharray": isGhost ? "4 2" : null
+    }));
+    // Label hidden below month-level zoom; <title> hover always works.
+    if (view.pxPerDay >= LABEL_VISIBLE_PX_PER_DAY) {
+      const fontPx = 12;
+      const cursor = labelCursors[subLaneIdx] ?? -Infinity;
+      const txtX = x + s + 4;
+      if (txtX >= cursor) {
+        const txt = el("text", { x: txtX, y: cy + 4, fill: "#e7e9ec", "font-size": fontPx, "pointer-events": "none" });
+        txt.textContent = c.title;
+        g.appendChild(txt);
+        labelCursors[subLaneIdx] = txtX + approxTextWidth(c.title, fontPx) + 6;
+      }
+    }
+  } else if (c.kind === "recurring" && c.recurrence) {
+    const x0 = screenX(c.start);
+    const x1 = screenX(c.recurrence.until || addMonths(c.start, 12));
+    if (x1 < -2 || x0 > viewportW + 2) return null;
+    const yMid = top + h / 2;
+    // Background hit area so the recurring chain is easy to click/drag.
+    g.appendChild(el("rect", {
+      class: "clip-body",
+      x: x0, y: top + padTop, width: Math.max(8, x1 - x0), height: barH,
+      fill: color, "fill-opacity": isGhost ? 0.07 : 0.12, stroke: "none", rx: 4, ry: 4
+    }));
+    g.appendChild(el("line", {
+      x1: x0, x2: x1, y1: yMid, y2: yMid,
+      stroke: color, "stroke-width": 2, "stroke-opacity": isDone ? 0.4 : 0.85,
+      "stroke-dasharray": isGhost ? "5 3" : null
+    }));
+    const stepDays = c.recurrence.freq === "weekly" ? 7
+                   : c.recurrence.freq === "biweekly" ? 14
+                   : c.recurrence.freq === "monthly" ? 30 : 7;
+    let d = c.start;
+    let safety = 0;
+    while (parseDate(d) <= parseDate(c.recurrence.until || addMonths(c.start, 12)) && safety++ < 2000) {
+      const tx = screenX(d);
+      if (tx >= -2 && tx <= viewportW + 2) {
+        g.appendChild(el("circle", { cx: tx, cy: yMid, r: 3, fill: color, "fill-opacity": isDone ? 0.5 : 1 }));
+      }
+      d = addDays(d, stepDays);
+    }
+    // Label lives in the recurring clip's own sub-lane — never over another clip.
+    const fontPx = 11;
+    const label = `${c.title}  ·  ${c.recurrence.freq}`;
+    const cursor = labelCursors[subLaneIdx] ?? -Infinity;
+    const txtX = x0 + 4;
+    if ((x1 - x0) >= 40 && txtX >= cursor) {
+      const txt = el("text", { x: txtX, y: top + padTop + 11, fill: "#e7e9ec", "font-size": fontPx, "pointer-events": "none" });
+      txt.textContent = label;
+      g.appendChild(txt);
+      labelCursors[subLaneIdx] = txtX + approxTextWidth(label, fontPx) + 6;
+    }
+  }
+
+  if (isGhost) {
+    const x = screenX(c.start);
+    g.appendChild(ghostActions(c, x, top));
+  }
+
+  return g;
+}
+
+/* -------- ruler -------- */
+function computeRulerTicks() {
+  const w = document.getElementById("timelineWrap").clientWidth || 800;
+  const startDate = screenXToDate(-20);
+  const endDate = screenXToDate(w + 20);
+  const px = view.pxPerDay;
+
+  // Pick density tier by px/day
+  // decade: years are major, decades are super
+  // year: months minor, years major
+  // quarter: months minor, quarters major
+  // month: weeks minor, months major
+  // week: days minor, weeks major
+  let majorUnit, minorUnit, labelFmt;
+  if (px < 0.6)      { majorUnit = "decade"; minorUnit = "year";    labelFmt = "year"; }
+  else if (px < 2)   { majorUnit = "year";   minorUnit = "quarter"; labelFmt = "year"; }
+  else if (px < 8)   { majorUnit = "quarter";minorUnit = "month";   labelFmt = "quarter"; }
+  else if (px < 22)  { majorUnit = "month";  minorUnit = "week";    labelFmt = "month"; }
+  else               { majorUnit = "week";   minorUnit = "day";     labelFmt = "weekShort"; }
+
+  const major = [], minor = [];
+  const stepIter = {
+    day:     d => addDays(d, 1),
+    week:    d => addDays(d, 7),
+    month:   d => addMonths(d, 1),
+    quarter: d => addMonths(d, 3),
+    year:    d => addMonths(d, 12),
+    decade:  d => addMonths(d, 120)
+  };
+  function align(d, unit) {
+    const dt = parseDate(d);
+    if (unit === "day") return fmtDate(dt);
+    if (unit === "week") {
+      const dow = dt.getDay(); // 0..6, Sun..Sat
+      const back = (dow + 6) % 7; // align to Monday
+      dt.setDate(dt.getDate() - back);
+      return fmtDate(dt);
+    }
+    if (unit === "month") { dt.setDate(1); return fmtDate(dt); }
+    if (unit === "quarter") {
+      const q = Math.floor(dt.getMonth() / 3) * 3;
+      dt.setMonth(q); dt.setDate(1); return fmtDate(dt);
+    }
+    if (unit === "year") { dt.setMonth(0); dt.setDate(1); return fmtDate(dt); }
+    if (unit === "decade") {
+      const y = Math.floor(dt.getFullYear() / 10) * 10;
+      return `${y}-01-01`;
+    }
+    return fmtDate(dt);
+  }
+  let d = align(startDate, minorUnit);
+  let safety = 0;
+  while (parseDate(d) <= parseDate(endDate) && safety++ < 10000) {
+    minor.push({ date: d });
+    d = stepIter[minorUnit](d);
+  }
+  d = align(startDate, majorUnit);
+  safety = 0;
+  while (parseDate(d) <= parseDate(endDate) && safety++ < 10000) {
+    const dt = parseDate(d);
+    let label;
+    if (labelFmt === "year") label = String(dt.getFullYear());
+    else if (labelFmt === "quarter") label = `Q${Math.floor(dt.getMonth()/3)+1} '${String(dt.getFullYear()).slice(2)}`;
+    else if (labelFmt === "month") label = dt.toLocaleString(undefined, { month: "short", year: "2-digit" });
+    else if (labelFmt === "weekShort") label = `${dt.getMonth()+1}/${dt.getDate()}`;
+    else label = fmtDate(dt);
+    major.push({ date: d, label });
+    d = stepIter[majorUnit](d);
+  }
+  return { major, minor };
+}
+
+function renderRuler() {
+  const ruler = document.getElementById("ruler");
+  const svg = document.getElementById("rulerSvg");
+  const w = ruler.clientWidth || document.getElementById("timelineWrap").clientWidth;
+  svg.setAttribute("width", w);
+  svg.setAttribute("height", RULER_HEIGHT);
+  svg.innerHTML = "";
+
+  // Severity ticks on the ruler: red for OVERLOAD, yellow for SNUG.
+  if (lastSequencerResult) {
+    for (const c of lastSequencerResult.conflicts) {
+      if (c.kind !== "overload" || !c.months) continue;
+      const stroke = c.severity === "snug" ? "#e8c97a" : "#e94c4c";
+      for (const m of c.months) {
+        const x = screenX(m + "-15");
+        if (x < -2 || x > w + 2) continue;
+        svg.appendChild(el("line", { x1: x, x2: x, y1: 0, y2: 5, stroke, "stroke-width": 2 }));
+      }
+    }
+  }
+
+  const ticks = computeRulerTicks();
+  for (const t of ticks.minor) {
+    const x = screenX(t.date);
+    if (x < -2 || x > w + 2) continue;
+    svg.appendChild(el("line", { x1: x, x2: x, y1: RULER_HEIGHT - 6, y2: RULER_HEIGHT, stroke: "#3a4150" }));
+  }
+  for (const t of ticks.major) {
+    const x = screenX(t.date);
+    if (x < -2 || x > w + 2) continue;
+    svg.appendChild(el("line", { x1: x, x2: x, y1: 0, y2: RULER_HEIGHT, stroke: "#4a5468" }));
+    const tx = el("text", { x: x + 4, y: 14, fill: "#9aa3b3", "font-size": 11 });
+    tx.textContent = t.label;
+    svg.appendChild(tx);
+  }
+  // "today" tick
+  const tx = screenX(todayStr());
+  if (tx >= 0 && tx <= w) {
+    svg.appendChild(el("line", { x1: tx, x2: tx, y1: 0, y2: RULER_HEIGHT, stroke: "#e94c4c", "stroke-width": 1 }));
+  }
+}
+
+/* -------- balance meter -------- */
+function renderBalance() {
+  const wrap = document.getElementById("balanceSvgWrap");
+  const svg = document.getElementById("balanceSvg");
+  const w = wrap.clientWidth;
+  const h = 60;
+  svg.setAttribute("width", w);
+  svg.setAttribute("height", h);
+  svg.innerHTML = "";
+
+  if (!lastSequencerResult) return;
+
+  // bucket choice tracks zoom: at low zoom, group by quarter; mid, by month; high, by week.
+  const px = view.pxPerDay;
+  let bucketDays = px < 2 ? 90 : px < 8 ? 30 : px < 22 ? 14 : 7;
+  const startDate = screenXToDate(0);
+  const endDate = screenXToDate(w);
+  const buckets = [];
+  let d = startDate;
+  let safety = 0;
+  while (parseDate(d) < parseDate(endDate) && safety++ < 500) {
+    buckets.push(d);
+    d = addDays(d, bucketDays);
+  }
+
+  // For each bucket, sum effort by track across the included months. One <g> per bucket,
+  // with a <title> child so hover gives the per-bucket breakdown.
+  for (const bStart of buckets) {
+    const bEnd = addDays(bStart, bucketDays);
+    const x0 = screenX(bStart);
+    const x1 = screenX(bEnd);
+    const bw = Math.max(1, x1 - x0 - 1);
+    let total = 0;
+    const byTrack = [];
+    for (const t of orderedTracks()) {
+      const inner = lastSequencerResult.effortByTrackByMonth.get(t.id);
+      let sum = 0;
+      if (inner) {
+        for (const [m, v] of inner) {
+          const md = parseDate(m + "-15");
+          if (md >= parseDate(bStart) && md < parseDate(bEnd)) sum += v;
+        }
+      }
+      byTrack.push({ track: t, value: sum });
+      total += sum;
+    }
+    const g = el("g");
+    if (total <= 0) {
+      g.appendChild(el("rect", { x: x0, y: h - 4, width: bw, height: 4, fill: "#1d2129" }));
+      const title = el("title"); title.textContent = `${bStart} – ${bEnd}\n(no scheduled effort)`;
+      g.appendChild(title);
+      svg.appendChild(g);
+      continue;
+    }
+    let y = h;
+    for (const { track, value } of byTrack) {
+      if (!value) continue;
+      const hh = (value / Math.max(total, state.settings.weeklyCapacity || 1)) * (h - 6);
+      y -= hh;
+      g.appendChild(el("rect", { x: x0, y, width: bw, height: hh, fill: track.color, "fill-opacity": 0.85 }));
+    }
+    const title = el("title");
+    title.textContent = `${bStart} – ${bEnd}\n` + byTrack.filter(b => b.value > 0).map(b => `${b.track.name}: ${(100 * b.value / total).toFixed(0)}%`).join("\n");
+    g.appendChild(title);
+    svg.appendChild(g);
+  }
+}
+
+/* -------- up next -------- */
+function nextOccurrence(c, fromDate) {
+  // For recurring clips, find the next occurrence on/after fromDate within its window.
+  if (c.kind !== "recurring" || !c.recurrence) return c.start;
+  const stepDays = c.recurrence.freq === "weekly" ? 7
+                 : c.recurrence.freq === "biweekly" ? 14
+                 : c.recurrence.freq === "monthly" ? 30 : 7;
+  let d = c.start;
+  const until = c.recurrence.until || addMonths(c.start, 24);
+  let safety = 0;
+  while (parseDate(d) < parseDate(fromDate) && parseDate(d) <= parseDate(until) && safety++ < 2000) {
+    d = addDays(d, stepDays);
+  }
+  if (parseDate(d) > parseDate(until)) return null;
+  return d;
+}
+
+function renderUpNext() {
+  const wrap = document.getElementById("upnextItems");
+  wrap.innerHTML = "";
+  const today = todayStr();
+  const cutoff = addDays(today, state.settings.lookaheadDays || 14);
+  const items = [];
+  for (const c of state.clips) {
+    if (c.status === "done" || c.status === "skipped") continue;
+    if (c.aiProposalId) continue;
+    let occur;
+    if (c.kind === "recurring") occur = nextOccurrence(c, today);
+    else occur = c.start;
+    if (!occur) continue;
+    if (parseDate(occur) < parseDate(today)) continue;
+    if (parseDate(occur) > parseDate(cutoff)) continue;
+    items.push({ clip: c, when: occur });
+  }
+  items.sort((a, b) => parseDate(a.when) - parseDate(b.when));
+  if (!items.length) {
+    const empty = document.createElement("span");
+    empty.className = "muted"; empty.style.fontSize = "12px";
+    empty.textContent = `Nothing in the next ${state.settings.lookaheadDays} days.`;
+    wrap.appendChild(empty);
+    return;
+  }
+  // Show 3 chips + a "+N more" overflow pill that expands when clicked (P2-7).
+  const visibleLimit = wrap.dataset.expanded === "1" ? items.length : 3;
+  for (const { clip: c, when } of items.slice(0, visibleLimit)) {
+    const chip = document.createElement("div");
+    chip.className = "upnext-chip";
+    const dot = document.createElement("span");
+    dot.className = "dot";
+    dot.style.background = getTrack(c.trackId)?.color || "#888";
+    chip.appendChild(dot);
+    const title = document.createElement("span");
+    title.textContent = c.title;
+    chip.appendChild(title);
+    const w = document.createElement("span"); w.className = "when";
+    w.textContent = relTime(when);
+    chip.appendChild(w);
+    const ok = document.createElement("button");
+    ok.textContent = "✓"; ok.title = "Mark done";
+    ok.onclick = () => { c.status = "done"; saveState(); render(); };
+    chip.appendChild(ok);
+    const sk = document.createElement("button");
+    sk.textContent = "⏭"; sk.title = "Skip";
+    sk.onclick = () => { c.status = "skipped"; saveState(); render(); };
+    chip.appendChild(sk);
+    chip.onclick = (e) => { if (e.target.tagName !== "BUTTON") openEditor(c.id); };
+    wrap.appendChild(chip);
+  }
+  if (items.length > visibleLimit) {
+    const more = document.createElement("div");
+    more.className = "upnext-chip"; more.style.cursor = "pointer";
+    more.textContent = `+${items.length - visibleLimit} more`;
+    more.title = "Show all";
+    more.onclick = () => { wrap.dataset.expanded = "1"; render(); };
+    wrap.appendChild(more);
+  } else if (wrap.dataset.expanded === "1" && items.length > 3) {
+    const less = document.createElement("div");
+    less.className = "upnext-chip"; less.style.cursor = "pointer";
+    less.textContent = "show less";
+    less.onclick = () => { wrap.dataset.expanded = "0"; render(); };
+    wrap.appendChild(less);
+  }
+}
+
+function relTime(dateStr) {
+  const diff = Math.round(daysBetween(todayStr(), dateStr));
+  if (diff === 0) return "today";
+  if (diff === 1) return "tomorrow";
+  if (diff < 7) return `in ${diff}d`;
+  if (diff < 30) return `in ${Math.round(diff/7)}w`;
+  return `in ${Math.round(diff/30)}mo`;
+}
+
+/* -------- conflicts panel -------- */
+function renderConflicts() {
+  const list = document.getElementById("conflictList");
+  const cnt = document.getElementById("conflictCount");
+  const hint = document.getElementById("conflictHint");
+  list.innerHTML = "";
+  const conflicts = lastSequencerResult ? lastSequencerResult.conflicts : [];
+  cnt.textContent = conflicts.length;
+  hint.textContent = conflicts.length ? "" : "— all clear";
+  // Order: real problems first (overload, cycle, deadline, transition), then snug, then silent.
+  const sevRank = { overload: 0, cycle: 0, deadline: 1, transition: 2, snug: 3, silent: 4 };
+  const sortable = conflicts.slice().sort((a, b) =>
+    (sevRank[a.severity || a.kind] ?? 5) - (sevRank[b.severity || b.kind] ?? 5)
+  );
+  for (const c of sortable) {
+    const div = document.createElement("div");
+    div.className = "item";
+    const kindLabel = labelForConflictRow(c);
+    const kindColor = severityColor(c);
+    div.innerHTML = `<span class="kind" style="color:${kindColor}">${kindLabel}</span> ${escapeHtml(c.msg)}`;
+    // Discuss-fix: ask the Composer for minimal modifications to clear this one conflict.
+    if (c.kind === "overload" && c.severity === "overload") {
+      const btn = document.createElement("button");
+      btn.textContent = "Discuss fix"; btn.title = "Ask the Composer to propose a minimal fix for this stretch";
+      btn.style.marginLeft = "8px"; btn.style.fontSize = "10px"; btn.style.padding = "0 5px";
+      btn.onclick = (ev) => { ev.stopPropagation(); discussFixWithComposer(c); };
+      div.appendChild(btn);
+    }
+    if (c.clipIds && c.clipIds.length) {
+      div.style.cursor = "pointer";
+      div.onclick = () => {
+        const target = getClip(c.clipIds[0]);
+        if (!target) return;
+        centerOn(target.start);
+        openEditor(target.id);
+        render();
+      };
+    }
+    list.appendChild(div);
+  }
+}
+function labelForConflictRow(c) {
+  if (c.kind === "overload") return c.severity === "snug" ? "SNUG" : "OVERLOAD";
+  return labelForConflict(c.kind);
+}
+function severityColor(c) {
+  if (c.kind === "overload" && c.severity === "snug") return "#e8c97a"; // yellow
+  if (c.kind === "overload") return "#e07a7a";                          // red
+  if (c.kind === "cycle" || c.kind === "deadline" || c.kind === "transition") return "#e07a7a";
+  if (c.kind === "silent") return "#8a93a3";                            // muted grey
+  return "#d99";
+}
+function labelForConflict(k) {
+  return { overload: "OVERLOAD", transition: "TRANSITION", deadline: "DEADLINE", silent: "SILENT", cycle: "CYCLE" }[k] || k.toUpperCase();
+}
+function discussFixWithComposer(conflict) {
+  document.getElementById("composer").classList.add("open");
+  const text = `Conflict to fix (please propose a MINIMAL set of modifications — defer, shorten, or lower-effort — to clear it):\n[${conflict.kind}/${conflict.severity || "n/a"}] ${conflict.msg}`;
+  pushComposerMessage("user", text);
+  callComposer(text);
+}
+function escapeHtml(s) {
+  return (s || "").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[ch]));
+}
+
+/* ============================================================================
+   Interaction: pan, zoom, drag, resize, click
+   ============================================================================ */
+const svg = document.getElementById("timelineSvg");
+const timelineWrap = document.getElementById("timelineWrap");
+
+let drag = null;
+
+svg.addEventListener("mousedown", (e) => {
+  const rect = svg.getBoundingClientRect();
+  const localX = e.clientX - rect.left;
+  const localY = e.clientY - rect.top;
+  const clipG = e.target.closest("[data-clip-id]");
+  if (clipG) {
+    const clip = getClip(clipG.dataset.clipId);
+    if (!clip) return;
+    // ghost accept/dismiss
+    const action = e.target.getAttribute && e.target.getAttribute("data-action");
+    if (action === "accept") { acceptGhost(clip.id); return; }
+    if (action === "dismiss") { dismissGhost(clip.id); return; }
+
+    const handle = e.target.getAttribute && e.target.getAttribute("data-handle");
+    if (handle === "L" || handle === "R") {
+      drag = { mode: "resize", clipId: clip.id, edge: handle, startX: localX, startDate: clip.start, endDate: clip.end };
+      svg.classList.add("dragging");
+    } else {
+      drag = {
+        mode: "move", clipId: clip.id, startX: localX, startY: localY,
+        startDate: clip.start, endDate: clip.end, trackIdAtStart: clip.trackId
+      };
+      svg.classList.add("dragging");
+    }
+    e.preventDefault();
+    return;
+  }
+  // Otherwise treat empty-space drag as pan
+  drag = { mode: "pan", startX: e.clientX, startScrollX: view.scrollX };
+  svg.classList.add("panning");
+  e.preventDefault();
+});
+
+window.addEventListener("mousemove", (e) => {
+  if (!drag) return;
+  if (drag.mode === "pan") {
+    const dx = e.clientX - drag.startX;
+    view.scrollX = drag.startScrollX - dx;
+    render();
+  } else if (drag.mode === "move") {
+    const rect = svg.getBoundingClientRect();
+    const localX = e.clientX - rect.left;
+    const localY = e.clientY - rect.top;
+    const c = getClip(drag.clipId);
+    if (!c) return;
+    const days = Math.round((localX - drag.startX) / view.pxPerDay);
+    c.start = addDays(drag.startDate, days);
+    if (drag.endDate) c.end = addDays(drag.endDate, days);
+    // Re-track based on Y, using the variable-height layouts (not a flat TRACK_HEIGHT grid).
+    const tracks = orderedTracks();
+    let landedTrack = null;
+    for (const t of tracks) {
+      const lay = lastTrackLayouts.layouts.get(t.id);
+      if (localY >= lay.yStart && localY < lay.yStart + lay.height) { landedTrack = t; break; }
+    }
+    if (landedTrack && landedTrack.id !== c.trackId && isTrackActive(landedTrack)) {
+      c.trackId = landedTrack.id;
+    }
+    render();
+  } else if (drag.mode === "resize") {
+    const rect = svg.getBoundingClientRect();
+    const localX = e.clientX - rect.left;
+    const c = getClip(drag.clipId);
+    if (!c) return;
+    const days = Math.round((localX - drag.startX) / view.pxPerDay);
+    if (drag.edge === "L") {
+      const ns = addDays(drag.startDate, days);
+      if (parseDate(ns) < parseDate(c.end || c.start)) c.start = ns;
+    } else {
+      const ne = addDays(drag.endDate || drag.startDate, days);
+      if (parseDate(ne) > parseDate(c.start)) c.end = ne;
+    }
+    render();
+  }
+});
+
+window.addEventListener("mouseup", () => {
+  if (drag) {
+    svg.classList.remove("panning", "dragging");
+    if (drag.mode !== "pan") saveState();
+    drag = null;
+  }
+});
+
+svg.addEventListener("dblclick", (e) => {
+  const clipG = e.target.closest("[data-clip-id]");
+  if (clipG) openEditor(clipG.dataset.clipId);
+});
+
+// Wheel routing (post-v2.1 vertical scroll arrives via native overflow on #timelineWrap):
+//   ctrl/cmd + wheel → zoom (anchored at cursor)
+//   shift + wheel    → horizontal pan
+//   trackpad with horizontal component → horizontal pan
+//   otherwise        → let the browser do vertical scroll (don't preventDefault)
+svg.addEventListener("wheel", (e) => {
+  if (e.ctrlKey || e.metaKey) {
+    e.preventDefault();
+    const rect = svg.getBoundingClientRect();
+    const ax = e.clientX - rect.left;
+    const factor = e.deltaY < 0 ? 1.18 : 1/1.18;
+    zoomBy(factor, ax);
+    return;
+  }
+  if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+    e.preventDefault();
+    const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+    view.scrollX += delta;
+    render();
+    return;
+  }
+  // Otherwise: don't intervene — the native vertical scrollbar on #timelineWrap handles it,
+  // and the scroll-sync listener mirrors it onto the track-header column.
+}, { passive: false });
+
+/* ghost accept / dismiss */
+function acceptGhost(clipId) {
+  const c = getClip(clipId);
+  if (!c) return;
+  c.aiProposalId = null;
+  c.source = "ai";
+  saveState(); render();
+}
+function dismissGhost(clipId) {
+  state.clips = state.clips.filter(x => x.id !== clipId);
+  saveState(); render();
+}
+function acceptAllGhosts() {
+  for (const c of state.clips) if (c.aiProposalId) c.aiProposalId = null;
+  saveState(); render();
+}
+function dismissAllGhosts() {
+  state.clips = state.clips.filter(c => !c.aiProposalId);
+  // Also remove any ghost tracks (tracks with no clips that were created as ghosts — marked via notes)
+  saveState(); render();
+}
+
+/* ============================================================================
+   Editor drawer
+   ============================================================================ */
+let editingClipId = null;
+
+function openEditor(clipId) {
+  const c = getClip(clipId);
+  if (!c) return;
+  editingClipId = clipId;
+  const body = document.getElementById("editorBody");
+  body.innerHTML = "";
+
+  function field(label, node) {
+    const w = document.createElement("div");
+    w.className = "field";
+    const l = document.createElement("label"); l.textContent = label;
+    w.append(l, node);
+    return w;
+  }
+
+  const title = document.createElement("input"); title.type = "text"; title.value = c.title;
+  const kind = document.createElement("select");
+  for (const k of ["goal","event","recurring","milestone"]) {
+    const o = document.createElement("option"); o.value = k; o.textContent = k;
+    if (k === c.kind) o.selected = true;
+    kind.appendChild(o);
+  }
+  const track = document.createElement("select");
+  for (const t of orderedTracks()) {
+    const o = document.createElement("option"); o.value = t.id; o.textContent = t.name;
+    if (t.id === c.trackId) o.selected = true;
+    track.appendChild(o);
+  }
+  const start = document.createElement("input"); start.type = "date"; start.value = c.start;
+  const end = document.createElement("input"); end.type = "date"; end.value = c.end || "";
+  const effort = document.createElement("input"); effort.type = "number"; effort.min = 1; effort.max = 5; effort.value = c.effort || 3;
+  const status = document.createElement("select");
+  for (const s of ["planned","active","done","skipped"]) {
+    const o = document.createElement("option"); o.value = s; o.textContent = s;
+    if (s === c.status) o.selected = true;
+    status.appendChild(o);
+  }
+  const notes = document.createElement("textarea"); notes.value = c.notes || ""; notes.rows = 3;
+
+  // Recurrence sub-form
+  const recFreq = document.createElement("select");
+  for (const f of ["weekly","biweekly","monthly"]) {
+    const o = document.createElement("option"); o.value = f; o.textContent = f;
+    if (c.recurrence && c.recurrence.freq === f) o.selected = true;
+    recFreq.appendChild(o);
+  }
+  const recUntil = document.createElement("input"); recUntil.type = "date";
+  recUntil.value = c.recurrence ? c.recurrence.until || "" : "";
+
+  // Disruption sub-form
+  const disBefore = document.createElement("input"); disBefore.type = "number"; disBefore.min = 0; disBefore.step = 1;
+  disBefore.value = c.disruption ? (c.disruption.monthsBefore ?? 0) : 0;
+  const disAfter = document.createElement("input"); disAfter.type = "number"; disAfter.min = 0; disAfter.step = 1;
+  disAfter.value = c.disruption ? (c.disruption.monthsAfter ?? 1) : 1;
+  const disRed = document.createElement("input"); disRed.type = "number"; disRed.min = 0; disRed.max = 1; disRed.step = 0.05;
+  disRed.value = c.disruption ? (c.disruption.capacityReduction ?? 0.3) : 0.3;
+
+  // Window
+  const winEar = document.createElement("input"); winEar.type = "date"; winEar.value = (c.window && c.window.earliest) || "";
+  const winLat = document.createElement("input"); winLat.type = "date"; winLat.value = (c.window && c.window.latest) || "";
+
+  // Depends-on picker (multi)
+  const depList = document.createElement("div");
+  const otherClips = state.clips.filter(x => x.id !== c.id && (x.kind === "goal" || x.kind === "milestone" || x.kind === "event"));
+  for (const oc of otherClips) {
+    const lbl = document.createElement("label");
+    lbl.style.display = "flex"; lbl.style.gap = "6px"; lbl.style.fontSize = "12px";
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.value = oc.id;
+    if ((c.dependsOn || []).includes(oc.id)) cb.checked = true;
+    lbl.append(cb, document.createTextNode(`${oc.title} (${oc.kind})`));
+    depList.appendChild(lbl);
+  }
+
+  document.getElementById("editorTitle").textContent =
+    c.aiProposalId ? "Ghost clip (AI proposal)" : "Edit clip";
+
+  body.appendChild(field("Title", title));
+  const tr = document.createElement("div"); tr.className = "field-row";
+  tr.appendChild(field("Kind", kind));
+  tr.appendChild(field("Track", track));
+  body.appendChild(tr);
+  const tr2 = document.createElement("div"); tr2.className = "field-row";
+  tr2.appendChild(field("Start", start));
+  tr2.appendChild(field("End", end));
+  body.appendChild(tr2);
+  const tr3 = document.createElement("div"); tr3.className = "field-row";
+  tr3.appendChild(field("Effort (1–5)", effort));
+  tr3.appendChild(field("Status", status));
+  body.appendChild(tr3);
+
+  const recWrap = document.createElement("div");
+  const recRow = document.createElement("div"); recRow.className = "field-row";
+  recRow.appendChild(field("Recurrence freq", recFreq));
+  recRow.appendChild(field("Recurrence until", recUntil));
+  recWrap.appendChild(recRow);
+
+  const disWrap = document.createElement("div");
+  const disRow = document.createElement("div"); disRow.className = "field-row";
+  disRow.appendChild(field("Disrupt before (mo)", disBefore));
+  disRow.appendChild(field("Disrupt after (mo)", disAfter));
+  disRow.appendChild(field("Reduction (0–1)", disRed));
+  disWrap.appendChild(disRow);
+
+  function syncKindRows() {
+    recWrap.style.display = (kind.value === "recurring") ? "" : "none";
+    disWrap.style.display = (kind.value === "event") ? "" : "none";
+    // milestones / events: end = null
+    end.disabled = (kind.value !== "goal");
+  }
+  kind.onchange = syncKindRows;
+  body.appendChild(recWrap);
+  body.appendChild(disWrap);
+  syncKindRows();
+
+  const winRow = document.createElement("div"); winRow.className = "field-row";
+  winRow.appendChild(field("Window earliest", winEar));
+  winRow.appendChild(field("Window latest", winLat));
+  body.appendChild(winRow);
+
+  body.appendChild(field("Depends on", depList));
+  body.appendChild(field("Notes", notes));
+
+  document.getElementById("editor").classList.add("open");
+
+  document.getElementById("editorSave").onclick = () => {
+    c.title = title.value.trim() || "Untitled";
+    c.kind = kind.value;
+    c.trackId = track.value;
+    c.start = start.value || c.start;
+    c.end = (c.kind === "goal") ? (end.value || null) : null;
+    c.effort = Math.max(1, Math.min(5, parseInt(effort.value, 10) || 3));
+    c.status = status.value;
+    c.notes = notes.value;
+    if (c.kind === "recurring") {
+      c.recurrence = { freq: recFreq.value, until: recUntil.value || addMonths(c.start, 6) };
+    } else c.recurrence = null;
+    if (c.kind === "event") {
+      c.disruption = {
+        monthsBefore: parseInt(disBefore.value, 10) || 0,
+        monthsAfter: parseInt(disAfter.value, 10) || 0,
+        capacityReduction: parseFloat(disRed.value) || 0
+      };
+    } else c.disruption = null;
+    c.window = (winEar.value || winLat.value)
+      ? { earliest: winEar.value || null, latest: winLat.value || null } : null;
+    c.dependsOn = Array.from(depList.querySelectorAll("input:checked")).map(cb => cb.value);
+    // Save also drops aiProposalId — manual edit accepts the ghost.
+    if (c.aiProposalId) c.aiProposalId = null;
+    saveState(); render();
+    document.getElementById("editor").classList.remove("open");
+    editingClipId = null;
+  };
+  document.getElementById("editorDelete").onclick = () => {
+    if (!confirm("Delete this clip?")) return;
+    deleteClip(c.id);
+    document.getElementById("editor").classList.remove("open");
+    editingClipId = null;
+  };
+}
+document.getElementById("editorClose").onclick =
+document.getElementById("editorCancel").onclick = () => {
+  document.getElementById("editor").classList.remove("open");
+  editingClipId = null;
+};
+
+/* ============================================================================
+   AI Composer
+   ============================================================================ */
+const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
+const COMPOSER_MODEL = "claude-sonnet-4-6";
+const CHAT_HISTORY_CAP = 40;
+
+function composerSystemPrompt() {
+  return `You are Lifetracks Composer, an assistant that helps the user compose their life onto a multitrack timeline.
+
+The metaphor: a Pro Tools session, where tracks are life domains (e.g. Fatherhood, Career, Health), and clips are goals (spans), events (points with disruption zones), recurring habits (repeating ticks), or milestones (flags).
+
+Your job: turn natural-language intent into concrete, dated, editable structure — never vague advice. Propose specific clips on specific tracks with real dates and a one-line rationale in 'notes'.
+
+Today is ${todayStr()}.
+
+You MUST reply with a single JSON object — no prose outside JSON, no markdown code fence. Exact shape:
+
+{
+  "message": "your conversational reply to show in chat",
+  "questions": ["optional clarifying questions, may be empty"],
+  "proposal": {
+    "newTracks": [ { "tempId": "t1", "name": "...", "color": "#5b8def" } ],
+    "newClips":  [ {
+      "tempId": "c1",
+      "trackId": "<existing track id, or omit>",
+      "trackTempId": "t1 if assigning to a new track, else omit",
+      "kind": "goal" | "event" | "recurring" | "milestone",
+      "title": "...",
+      "start": "YYYY-MM-DD",
+      "end": "YYYY-MM-DD or null (only goals have end)",
+      "effort": 1,
+      "recurrence": { "freq": "weekly" | "biweekly" | "monthly", "until": "YYYY-MM-DD" } | null,
+      "disruption": { "monthsBefore": 0, "monthsAfter": 0, "capacityReduction": 0.0 } | null,
+      "dependsOn": ["clipId or tempId", "..."],
+      "notes": "one-line rationale"
+    } ],
+    "modifications": [ { "clipId": "<existing id>", "changes": { "start": "...", "title": "..." } } ],
+    "removals": [ "<existing clip id>" ]
+  }
+}
+
+Rules:
+- All dates absolute YYYY-MM-DD.
+- Reuse existing tracks when sensible; only propose new tracks for genuinely new domains.
+- 'effort' is sustained monthly load: 1=trivial, 3=moderate, 5=consuming. RECURRING habit clips are almost always effort 1 or 2 — habits run in the background under foreground goals.
+
+Portion control (HARD limits — overflow goes to a follow-up turn):
+- AT MOST 1 new track per turn.
+- AT MOST 8 new clips per turn (across all kinds).
+- For big intents (becoming a parent, career pivot, marathon training), propose ONLY **Phase 1 — roughly the next 8–12 weeks**. State in 'message' what Phases 2 and 3 would cover, and offer to add them when the user is ready. Do not dump the whole arc.
+- 'questions' and 'proposal' are MUTUALLY EXCLUSIVE in spirit: if you're asking clarifying questions, propose ≤ 3 clips (or none). Never ask "is this your first child?" while simultaneously proposing 23 clips that already assume the answer.
+
+Capacity awareness (the state snapshot includes per-month capacity AND remaining capacity for the next 18 months under 'capacityForecast'):
+- Your proposal must NOT push any month above its capacity. Stagger goal starts, shorten spans, or lower efforts to comply. If you had to trim intent to fit, say so in 'message'.
+- For a major life event (e.g. becoming a parent), propose the event with a disruption zone first, then propose goals on relevant tracks whose effort/span RESPECTS the capacity dip — not goals that violate it.
+- For "be a better son" or similar relational intents, include a recurring contact clip (effort 1–2), two concrete visit clips with real dates, and one milestone, each with a one-line 'notes' rationale.
+- If unsure of the user's situation, ask 1–3 clarifying questions in 'questions' and keep the proposal small.`;
+}
+
+function composerStateSnapshot() {
+  // Compact form for sending to the API: drop nulls and verbose fields.
+  // Capacity forecast: for the next 18 months, what does the sequencer say about each
+  // month's capacity and how much is already loaded? The Composer needs this to avoid
+  // pushing months over capacity (P0-3).
+  const forecast = [];
+  if (lastSequencerResult) {
+    const today = todayStr();
+    for (let i = 0; i < 18; i++) {
+      const m = monthKey(addMonths(today, i));
+      const cap = lastSequencerResult.capByMonth.get(m);
+      const load = lastSequencerResult.totalByMonth.get(m) || 0;
+      if (cap == null) continue;
+      forecast.push({
+        month: m,
+        capacity: +cap.toFixed(2),
+        load: +load.toFixed(2),
+        remaining: +(cap - load).toFixed(2)
+      });
+    }
+  }
+  return {
+    today: todayStr(),
+    settings: state.settings,
+    tracks: state.tracks.map(t => ({ id: t.id, name: t.name, color: t.color, order: t.order, muted: t.muted, soloed: t.soloed })),
+    clips: state.clips
+      .filter(c => c.status !== "done" && c.status !== "skipped")
+      .map(c => {
+        const o = { id: c.id, trackId: c.trackId, kind: c.kind, title: c.title, start: c.start };
+        if (c.end) o.end = c.end;
+        if (c.effort) o.effort = c.effort;
+        if (c.recurrence) o.recurrence = c.recurrence;
+        if (c.disruption) o.disruption = c.disruption;
+        if (c.dependsOn && c.dependsOn.length) o.dependsOn = c.dependsOn;
+        if (c.window) o.window = c.window;
+        if (c.notes) o.notes = c.notes;
+        return o;
+      }),
+    capacityForecast: forecast,
+    conflicts: (lastSequencerResult ? lastSequencerResult.conflicts : []).map(c => ({ kind: c.kind, severity: c.severity || null, msg: c.msg }))
+  };
+}
+
+async function callComposer(userText) {
+  if (!state.settings.apiKey) {
+    pushComposerMessage("error", "No API key set. Open Settings (⚙) and paste your Anthropic key. (Lifetracks works fully without one — you just don't get the Composer.)");
+    return;
+  }
+  const status = document.getElementById("composerStatus");
+  status.textContent = "thinking…";
+
+  // Build chat history for the API: alternating user/assistant, ending with the new user turn.
+  const history = state.chat.slice(-CHAT_HISTORY_CAP);
+  // The model needs the world state too; send it as a structured first user turn alongside the request.
+  const worldState = composerStateSnapshot();
+  const apiMessages = [];
+  // Prepend prior turns
+  for (const t of history) {
+    apiMessages.push({ role: t.role, content: t.content });
+  }
+  // New user turn: include both the world snapshot and the user's intent.
+  const userPayload = `Current Lifetracks state (JSON):\n${JSON.stringify(worldState, null, 2)}\n\nUser says: ${userText}`;
+  apiMessages.push({ role: "user", content: userPayload });
+
+  try {
+    const res = await fetch(ANTHROPIC_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": state.settings.apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model: COMPOSER_MODEL,
+        max_tokens: 4096,
+        system: composerSystemPrompt(),
+        messages: apiMessages
+      })
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      pushComposerMessage("error", `API ${res.status}: ${errText.slice(0, 400)}`);
+      status.textContent = "";
+      return;
+    }
+    const data = await res.json();
+    const rawText = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("\n").trim();
+
+    // Record the raw turn in chat history (we keep the original userText, not the worldState payload).
+    state.chat.push({ role: "user", content: userText, ts: Date.now() });
+    state.chat.push({ role: "assistant", content: rawText, ts: Date.now() });
+    if (state.chat.length > CHAT_HISTORY_CAP) state.chat = state.chat.slice(-CHAT_HISTORY_CAP);
+
+    // Parse JSON — strip code fences if Claude added them despite instructions.
+    let parsed = null, parseErr = null;
+    const stripped = rawText.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
+    try { parsed = JSON.parse(stripped); } catch (e) { parseErr = e; }
+    if (!parsed) {
+      pushComposerMessage("assistant", rawText, null, { parseError: true });
+    } else {
+      pushComposerMessage("assistant", parsed.message || "(no message)", parsed, { parseError: false });
+      if (parsed.proposal) applyProposalAsGhosts(parsed.proposal);
+    }
+    saveState();
+    status.textContent = "";
+  } catch (e) {
+    pushComposerMessage("error", `Network error: ${e.message}`);
+    status.textContent = "";
+  }
+}
+
+function pushComposerMessage(role, content, parsed, opts) {
+  const chat = document.getElementById("composerChat");
+  const div = document.createElement("div");
+  div.className = "msg " + role;
+  div.textContent = content;
+  if (parsed) {
+    if (parsed.questions && parsed.questions.length) {
+      const q = document.createElement("div"); q.className = "questions";
+      q.innerHTML = "<strong>Questions:</strong><br>" + parsed.questions.map(escapeHtml).join("<br>");
+      div.appendChild(q);
+    }
+    if (parsed.proposal) {
+      const p = parsed.proposal;
+      const totals = (p.newTracks || []).length + (p.newClips || []).length + (p.modifications || []).length + (p.removals || []).length;
+      if (totals > 0) {
+        const s = document.createElement("div"); s.className = "proposal-summary";
+        s.innerHTML = `Proposal: <strong>+${(p.newTracks || []).length}</strong> track(s), <strong>+${(p.newClips || []).length}</strong> clip(s), <strong>${(p.modifications || []).length}</strong> change(s), <strong>${(p.removals || []).length}</strong> removal(s).`;
+        // Pre-accept conflict preview (P0-4)
+        const delta = previewConflictDelta();
+        if (delta) {
+          const d = document.createElement("div");
+          d.style.marginTop = "4px"; d.style.fontSize = "11px";
+          if (delta.delta > 0) {
+            d.style.color = "#e0a070";
+            d.textContent = `If accepted: +${delta.delta} new conflict${delta.delta === 1 ? "" : "s"} (was ${delta.baselineCount}, would be ${delta.ghostCount}).`;
+          } else if (delta.delta < 0) {
+            d.style.color = "#7fd47f";
+            d.textContent = `If accepted: ${-delta.delta} fewer conflict${delta.delta === -1 ? "" : "s"}.`;
+          } else {
+            d.style.color = "#8a93a3";
+            d.textContent = `If accepted: no new conflicts.`;
+          }
+          s.appendChild(d);
+        }
+        const actions = document.createElement("div"); actions.className = "actions";
+        const ok = document.createElement("button"); ok.className = "btn-primary"; ok.textContent = "Accept all";
+        ok.onclick = () => acceptAllGhosts();
+        const no = document.createElement("button"); no.textContent = "Dismiss all";
+        no.onclick = () => dismissAllGhosts();
+        actions.append(ok, no);
+        s.appendChild(actions);
+        // Per-track accept (P0-4): one button per track that has ghosts, so the user can take
+        // the domain they're confident about and discuss the rest.
+        const byTrack = getGhostsByTrack();
+        if (byTrack.size > 1) {
+          const trackRow = document.createElement("div");
+          trackRow.style.display = "flex"; trackRow.style.flexWrap = "wrap"; trackRow.style.gap = "4px"; trackRow.style.marginTop = "6px";
+          for (const [trackId, ghosts] of byTrack) {
+            const trk = getTrack(trackId);
+            if (!trk) continue;
+            const b = document.createElement("button");
+            b.style.fontSize = "11px"; b.style.padding = "2px 6px";
+            b.textContent = `Accept ${trk.name} (${ghosts.length})`;
+            b.title = `Accept the ${ghosts.length} ghost clip(s) on this track`;
+            b.onclick = () => acceptGhostsByTrack(trackId);
+            trackRow.appendChild(b);
+          }
+          s.appendChild(trackRow);
+        }
+        div.appendChild(s);
+      }
+    }
+  }
+  if (opts && opts.parseError) {
+    const r = document.createElement("button"); r.textContent = "Retry"; r.style.marginTop = "6px";
+    r.onclick = () => { /* let the user just re-send */ document.getElementById("composerInput").focus(); };
+    div.appendChild(document.createElement("br"));
+    div.appendChild(r);
+  }
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function applyProposalAsGhosts(p) {
+  // Map tempIds -> real ids for tracks/clips so dependsOn resolves later.
+  const trackIdByTemp = new Map();
+  for (const nt of (p.newTracks || [])) {
+    const t = addTrackInternal(nt.name || "New Track", nt.color);
+    // mark as ghost track via notes (so the user can keep or rename on accept-all)
+    t.notes = "(AI proposal)";
+    trackIdByTemp.set(nt.tempId, t.id);
+  }
+  const clipTempToId = new Map();
+  for (const nc of (p.newClips || [])) {
+    const id = uid();
+    clipTempToId.set(nc.tempId || id, id);
+    let trackId = nc.trackId;
+    if (!trackId && nc.trackTempId) trackId = trackIdByTemp.get(nc.trackTempId);
+    if (!trackId && state.tracks[0]) trackId = state.tracks[0].id;
+    const clip = {
+      id,
+      trackId,
+      kind: nc.kind || "goal",
+      title: nc.title || "Untitled",
+      notes: nc.notes || "",
+      start: nc.start || todayStr(),
+      end: nc.end || null,
+      effort: Math.max(1, Math.min(5, parseInt(nc.effort, 10) || 3)),
+      dependsOn: nc.dependsOn || [],
+      recurrence: nc.recurrence || null,
+      disruption: nc.disruption || null,
+      window: nc.window || null,
+      status: "planned",
+      source: "ai",
+      aiProposalId: "p_" + uid()
+    };
+    if (clip.kind === "goal" && !clip.end) clip.end = addMonths(clip.start, 3);
+    state.clips.push(clip);
+  }
+  // resolve tempId references in dependsOn (do a pass after all clips inserted)
+  for (const c of state.clips) {
+    if (!c.aiProposalId) continue;
+    c.dependsOn = (c.dependsOn || []).map(d => clipTempToId.get(d) || d);
+  }
+  // modifications & removals come from the proposal too — apply immediately (the spec calls these out as well).
+  for (const m of (p.modifications || [])) {
+    const c = getClip(m.clipId);
+    if (!c) continue;
+    Object.assign(c, m.changes || {});
+  }
+  for (const r of (p.removals || [])) {
+    state.clips = state.clips.filter(c => c.id !== r);
+  }
+  saveState(); render();
+}
+
+// internal addTrack that doesn't re-render; used by applyProposalAsGhosts
+function addTrackInternal(name, color) {
+  const order = state.tracks.length;
+  const t = {
+    id: uid(), name: name || "New Track",
+    color: color || PALETTE[order % PALETTE.length],
+    order, muted: false, soloed: false, collapsed: false, notes: ""
+  };
+  state.tracks.push(t);
+  return t;
+}
+
+// Run the sequencer twice — with ghost clips and without — to surface the delta the user
+// would commit to by clicking Accept all. Cheap; runs only when there are ghosts and the
+// proposal summary is being rendered. Does NOT depend on lastSequencerResult since the
+// composer hydration can fire before the first full render.
+function previewConflictDelta() {
+  const ghostIds = new Set(state.clips.filter(c => c.aiProposalId).map(c => c.id));
+  if (!ghostIds.size) return null;
+  const withGhosts = runSequencer().conflicts;
+  const saved = state.clips;
+  state.clips = state.clips.filter(c => !ghostIds.has(c.id));
+  const baseline = runSequencer().conflicts;
+  state.clips = saved;
+  return { delta: withGhosts.length - baseline.length, baselineCount: baseline.length, ghostCount: withGhosts.length };
+}
+
+function getGhostsByTrack() {
+  const byTrack = new Map();
+  for (const c of state.clips) {
+    if (!c.aiProposalId) continue;
+    if (!byTrack.has(c.trackId)) byTrack.set(c.trackId, []);
+    byTrack.get(c.trackId).push(c);
+  }
+  return byTrack;
+}
+
+function acceptGhostsByTrack(trackId) {
+  for (const c of state.clips) {
+    if (c.aiProposalId && c.trackId === trackId) c.aiProposalId = null;
+  }
+  saveState(); render();
+}
+
+/* ============================================================================
+   Toolbar / settings / shortcuts / wiring
+   ============================================================================ */
+function openSettings() {
+  document.getElementById("settingApiKey").value = state.settings.apiKey || "";
+  document.getElementById("settingHorizon").value = state.settings.horizonYears;
+  document.getElementById("settingCapacity").value = state.settings.weeklyCapacity;
+  document.getElementById("settingLookahead").value = state.settings.lookaheadDays;
+  document.getElementById("settingsModal").classList.add("open");
+}
+function closeSettings() { document.getElementById("settingsModal").classList.remove("open"); }
+document.getElementById("settingsBtn").onclick = openSettings;
+document.getElementById("settingsClose").onclick = closeSettings;
+document.getElementById("settingsCancel").onclick = closeSettings;
+document.getElementById("settingsSave").onclick = () => {
+  state.settings.apiKey = document.getElementById("settingApiKey").value.trim() || null;
+  state.settings.horizonYears = Math.max(1, Math.min(50, parseInt(document.getElementById("settingHorizon").value, 10) || 5));
+  state.settings.weeklyCapacity = Math.max(0.1, Math.min(3, parseFloat(document.getElementById("settingCapacity").value) || 1));
+  state.settings.lookaheadDays = Math.max(1, Math.min(365, parseInt(document.getElementById("settingLookahead").value, 10) || 14));
+  saveState(); render(); closeSettings();
+};
+document.getElementById("resetAll").onclick = () => {
+  if (!confirm("Erase all tracks, clips, chat, and settings? This can't be undone (unless you exported a backup).")) return;
+  state = defaultState();
+  saveState(); render(); closeSettings();
+};
+
+document.getElementById("addTrackBtn").onclick = () => addTrack();
+document.getElementById("addClipBtn").onclick = () => {
+  if (!state.tracks.length) { alert("Add a track first."); return; }
+  const c = addClip({});
+  openEditor(c.id);
+};
+document.getElementById("composerBtn").onclick = () => {
+  document.getElementById("composer").classList.add("open");
+  document.getElementById("composerInput").focus();
+};
+document.getElementById("composerClose").onclick = () => {
+  document.getElementById("composer").classList.remove("open");
+};
+document.getElementById("composerSend").onclick = () => {
+  const ta = document.getElementById("composerInput");
+  const text = ta.value.trim();
+  if (!text) return;
+  pushComposerMessage("user", text);
+  ta.value = "";
+  callComposer(text);
+};
+document.getElementById("composerInput").addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+    e.preventDefault();
+    document.getElementById("composerSend").click();
+  }
+});
+document.getElementById("composerClear").onclick = () => {
+  if (!confirm("Clear Composer chat history?")) return;
+  state.chat = [];
+  document.getElementById("composerChat").innerHTML = "";
+  saveState();
+};
+document.getElementById("discussConflictsBtn").onclick = () => {
+  const conflicts = lastSequencerResult ? lastSequencerResult.conflicts : [];
+  if (!conflicts.length) { alert("No conflicts to discuss."); return; }
+  document.getElementById("composer").classList.add("open");
+  const text = "Help me resolve these conflicts:\n" + conflicts.map(c => `- [${c.kind}] ${c.msg}`).join("\n");
+  pushComposerMessage("user", text);
+  callComposer(text);
+};
+
+document.getElementById("conflictHeader").onclick = () => {
+  document.getElementById("conflictbar").classList.toggle("open");
+};
+
+document.getElementById("todayBtn").onclick = () => { centerOn(todayStr()); render(); };
+document.getElementById("fitAllBtn").onclick = () => {
+  const active = state.clips.filter(c => c.status !== "done" && c.status !== "skipped");
+  if (!active.length) { centerOn(todayStr()); render(); return; }
+  let minStr = active[0].start, maxStr = active[0].start;
+  for (const c of active) {
+    if (parseDate(c.start) < parseDate(minStr)) minStr = c.start;
+    const endStr = c.kind === "goal" ? (c.end || c.start)
+                : c.kind === "recurring" ? (c.recurrence?.until || c.start)
+                : c.start;
+    if (parseDate(endStr) > parseDate(maxStr)) maxStr = endStr;
+  }
+  // Include today + ~30 days margin on each side.
+  if (parseDate(todayStr()) < parseDate(minStr)) minStr = todayStr();
+  zoomToRange(minStr, maxStr);
+};
+document.getElementById("zoomInBtn").onclick = () => zoomBy(1.5);
+document.getElementById("zoomOutBtn").onclick = () => zoomBy(1/1.5);
+
+document.getElementById("exportBtn").onclick = () => {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `lifetracks-${todayStr()}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+document.getElementById("importBtn").onclick = () => document.getElementById("importFile").click();
+document.getElementById("importFile").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const obj = JSON.parse(text);
+    // Validate: must look like a Lifetracks state object.
+    if (!obj || typeof obj !== "object") throw new Error("not an object");
+    if (!("version" in obj) && !("tracks" in obj || "clips" in obj))
+      throw new Error("missing tracks/clips/version — not a Lifetracks file");
+    if (!confirm(`Import will overwrite the current state with ${(obj.tracks||[]).length} track(s) and ${(obj.clips||[]).length} clip(s). Continue?`)) {
+      e.target.value = ""; return;
+    }
+    state = migrate(obj);
+    saveState();
+    centerOn(todayStr());
+    render();
+  } catch (err) {
+    alert("Import failed: " + err.message);
+  }
+  e.target.value = "";
+});
+
+document.getElementById("emptyComposer").onclick = () => {
+  document.getElementById("composer").classList.add("open");
+  document.getElementById("composerInput").focus();
+};
+document.getElementById("emptyTrack").onclick = () => addTrack();
+
+// keyboard shortcuts
+window.addEventListener("keydown", (e) => {
+  const ae = document.activeElement;
+  const inField = ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.isContentEditable);
+  if (inField) return;
+  if (e.key === "n" || e.key === "N") {
+    if (!state.tracks.length) { alert("Add a track first."); return; }
+    const c = addClip({}); openEditor(c.id);
+  } else if (e.key === "t" || e.key === "T") {
+    addTrack();
+  } else if (e.key === " ") {
+    e.preventDefault(); centerOn(todayStr()); render();
+  } else if (e.key === "Escape") {
+    document.getElementById("editor").classList.remove("open");
+    document.getElementById("composer").classList.remove("open");
+    closeSettings();
+  }
+});
+
+// re-render on resize (timeline width changes)
+window.addEventListener("resize", () => render());
+
+// vertical-scroll sync between the track headers column and the timeline. We don't trigger a
+// re-render on scroll — the SVG is sized to the full content height and the browser's native
+// scroll moves it for us. Only the *other* pane's scrollTop needs to follow along.
+(() => {
+  const a = document.getElementById("trackHeaders");
+  const b = document.getElementById("timelineWrap");
+  let syncing = false;
+  a.addEventListener("scroll", () => {
+    if (syncing) return; syncing = true; b.scrollTop = a.scrollTop; syncing = false;
+  });
+  b.addEventListener("scroll", () => {
+    if (syncing) return; syncing = true; a.scrollTop = b.scrollTop; syncing = false;
+  });
+})();
+
+// hydrate composer chat from saved history
+function hydrateComposer() {
+  const chat = document.getElementById("composerChat");
+  chat.innerHTML = "";
+  for (const m of state.chat) {
+    if (m.role === "user") pushComposerMessage("user", m.content);
+    else {
+      // try to parse and render proposal summary inline
+      const stripped = (m.content || "").replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
+      let parsed = null;
+      try { parsed = JSON.parse(stripped); } catch {}
+      if (parsed) pushComposerMessage("assistant", parsed.message || m.content, parsed, { parseError: false });
+      else pushComposerMessage("assistant", m.content, null, { parseError: true });
+    }
+  }
+}
+
+// initial center + render (deferred one frame so the grid layout has settled)
+hydrateComposer();
+requestAnimationFrame(() => {
+  centerOn(todayStr());
+  render();
+});
+// ResizeObserver: re-render when the timeline wrap is resized for any reason
+// (window resize is covered, but the conflict panel opening also changes height).
+new ResizeObserver(() => render()).observe(document.getElementById("timelineWrap"));
+</script>
+</body>
+</html>
