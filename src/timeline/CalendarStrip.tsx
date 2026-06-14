@@ -1,20 +1,13 @@
-// CalendarStrip — the differentiator. A fat accordion calendar at the bottom
-// that reads like a real calendar (years, months, week-start dates, density
-// per track), shows today prominently, and serves as the primary navigation
-// surface for the canvas above.
+// CalendarStrip — the GarageBand wide-composer-style "notes" view at the
+// bottom of the screen. Today is anchored to the far-left; the strip shows
+// roughly one period of future context, with each track rendered as its own
+// thin row containing miniaturised clip bars (proportional, color-coded).
 //
-// Behaviour:
-//   - The strip's pxPerDay is derived from the canvas's pxPerDay so the strip
-//     always shows roughly 4× the canvas range, clamped between 6 months and
-//     3 years of context. Zoom the canvas, the strip accordions to match.
-//   - Labels accordion too: at tight scales the day numbers vanish, then the
-//     month names compact to a single letter, until only year labels remain.
-//   - Tap outside the viewport rectangle: jump canvas center to that date.
-//   - Tap or drag the rectangle: scrub the canvas, preserving the
-//     finger-to-rectangle offset (so dragging doesn't snap-jump).
+// Tap or drag to scrub. Tapping inside the viewport rectangle preserves the
+// finger-to-rectangle offset so the rect doesn't snap-jump under the finger.
 
 import { useCallback, useMemo, useRef } from "react";
-import type { Clip } from "@/core";
+import type { Clip, Track } from "@/core";
 import {
   addDays,
   addMonths,
@@ -25,12 +18,13 @@ import {
 } from "@/core";
 import type { ViewState } from "@/state";
 
-const ROW_GUTTER = 4;
-const ROW_YEAR = 22;
-const ROW_MONTH = 26;
-const ROW_DAY = 22;
-const ROW_DENSITY = 22;
-const ROW_TODAY_LABEL = 16;
+// Row layout. Total = ROW_GUTTER + ROW_YEAR + ROW_MONTH + tracks region + bottom pill.
+const ROW_GUTTER = 2;
+const ROW_YEAR = 20;
+const ROW_MONTH = 20;
+const ROW_TODAY_LABEL = 18;
+// A small left-buffer of "past" so the today line + pill don't get clipped at x=0.
+const PAST_BUFFER_DAYS = 7;
 
 interface Props {
   origin: string;
@@ -38,8 +32,8 @@ interface Props {
   setView: (v: Partial<ViewState>) => void;
   /** Width of the canvas above (used to compute "what's currently visible"). */
   canvasWidth: number;
+  tracks: readonly Track[];
   clips: readonly Clip[];
-  trackColorByClip: (c: Clip) => string;
   width: number;
   height?: number;
 }
@@ -49,20 +43,22 @@ export function CalendarStrip({
   view,
   setView,
   canvasWidth,
+  tracks,
   clips,
-  trackColorByClip,
   width,
-  height = 124,
+  height = 132,
 }: Props) {
-  // The strip shows 4× the canvas range by default, clamped to a sensible
-  // window so it never collapses into a single month or sprawls past 3 years.
-  const canvasViewportDays = canvasWidth / view.pxPerDay;
-  const desiredStripDays = Math.max(180, Math.min(1095, canvasViewportDays * 4));
-  const stripPxPerDay = width / desiredStripDays;
+  const today = todayStr();
+  const todayDayIdx = daysBetween(origin, today);
 
-  const canvasCenterDays = (view.scrollX + canvasWidth / 2) / view.pxPerDay;
-  const stripStartDays = canvasCenterDays - width / 2 / stripPxPerDay;
-  const stripEndDays = stripStartDays + width / stripPxPerDay;
+  // Show future-forward context. We pick the strip range so it covers from
+  // ~1 week before today out to today + (a number of days proportional to the
+  // canvas range × 4, clamped 90 days .. 5 years).
+  const canvasViewportDays = canvasWidth / view.pxPerDay;
+  const desiredStripDays = Math.max(90, Math.min(1825, canvasViewportDays * 4));
+  const stripStartDays = todayDayIdx - PAST_BUFFER_DAYS;
+  const stripEndDays = stripStartDays + desiredStripDays;
+  const stripPxPerDay = width / desiredStripDays;
   const stripStartDate = addDays(origin, Math.floor(stripStartDays));
   const stripEndDate = addDays(origin, Math.ceil(stripEndDays));
 
@@ -114,38 +110,114 @@ export function CalendarStrip({
     return out;
   }, [stripStartDate, stripEndDate, sxForDate]);
 
-  const dayNumbers = useMemo(() => {
-    if (stripPxPerDay < 1.2) return []; // too tight — skip day row entirely
-    const out: { date: string; day: number; x: number; isMonthStart: boolean }[] = [];
-    const startD = parseDate(stripStartDate);
-    const dow = startD.getDay();
-    const offset = dow === 0 ? 1 : (1 - dow + 7) % 7;
-    let cursor = addDays(stripStartDate, offset);
-    while (parseDate(cursor) <= parseDate(stripEndDate)) {
-      const d = parseDate(cursor);
-      out.push({
-        date: cursor,
-        day: d.getDate(),
-        x: sxForDate(cursor),
-        isMonthStart: d.getDate() <= 7,
-      });
-      cursor = addDays(cursor, 7);
-    }
-    return out;
-  }, [stripStartDate, stripEndDate, sxForDate, stripPxPerDay]);
+  // Track rows fill the area below the label headers, above the today-pill row.
+  const tracksTop = ROW_GUTTER + ROW_YEAR + ROW_MONTH;
+  const tracksBottom = height - ROW_TODAY_LABEL;
+  const tracksHeight = Math.max(8, tracksBottom - tracksTop);
+  const orderedTracks = useMemo(
+    () => tracks.slice().sort((a, b) => a.order - b.order),
+    [tracks],
+  );
+  const rowHeight = orderedTracks.length > 0 ? tracksHeight / orderedTracks.length : 0;
+  const trackIndex = useMemo(() => {
+    const m = new Map<string, number>();
+    orderedTracks.forEach((t, i) => m.set(t.id, i));
+    return m;
+  }, [orderedTracks]);
+  const anySoloed = orderedTracks.some((t) => t.soloed);
 
-  const densityMarks = useMemo(() => {
-    const out: { x: number; color: string }[] = [];
+  // Pre-render every clip as a mini-bar / marker on its track row.
+  const clipShapes = useMemo(() => {
+    const out: {
+      key: string;
+      kind: Clip["kind"];
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+      color: string;
+      dim: boolean;
+    }[] = [];
     for (const c of clips) {
-      const x = sxForDate(c.start);
-      if (x >= -2 && x <= width + 2) out.push({ x, color: trackColorByClip(c) });
+      const ti = trackIndex.get(c.trackId);
+      if (ti === undefined) continue;
+      const track = orderedTracks[ti]!;
+      const dim = anySoloed ? !track.soloed : track.muted;
+      const yTop = tracksTop + ti * rowHeight + 2;
+      const yH = Math.max(3, rowHeight - 4);
+      const xStart = sxForDate(c.start);
+      switch (c.kind) {
+        case "task": {
+          const xEnd = sxForDate(c.end ?? c.start);
+          out.push({
+            key: c.id,
+            kind: "task",
+            x: xStart,
+            y: yTop,
+            w: Math.max(2, xEnd - xStart),
+            h: yH,
+            color: track.color,
+            dim,
+          });
+          break;
+        }
+        case "stem": {
+          const until = c.recurrence?.until ?? addMonths(c.start, 6);
+          const xEnd = sxForDate(until);
+          out.push({
+            key: c.id,
+            kind: "stem",
+            x: xStart,
+            y: yTop + yH / 2 - 1,
+            w: Math.max(2, xEnd - xStart),
+            h: 2,
+            color: track.color,
+            dim,
+          });
+          break;
+        }
+        case "event": {
+          out.push({
+            key: c.id,
+            kind: "event",
+            x: xStart - 3,
+            y: yTop,
+            w: 6,
+            h: yH,
+            color: track.color,
+            dim,
+          });
+          break;
+        }
+        case "flag": {
+          out.push({
+            key: c.id,
+            kind: "flag",
+            x: xStart,
+            y: yTop,
+            w: 1.5,
+            h: yH,
+            color: track.color,
+            dim,
+          });
+          break;
+        }
+      }
     }
     return out;
-  }, [clips, sxForDate, width, trackColorByClip]);
+  }, [
+    clips,
+    orderedTracks,
+    trackIndex,
+    sxForDate,
+    rowHeight,
+    tracksTop,
+    anySoloed,
+  ]);
 
-  const today = todayStr();
   const todayX = sxForDate(today);
 
+  // Viewport rectangle
   const canvasStartDays = view.scrollX / view.pxPerDay;
   const canvasEndDays = canvasStartDays + canvasViewportDays;
   const vpX1 = sxForDays(canvasStartDays);
@@ -153,8 +225,6 @@ export function CalendarStrip({
 
   const ref = useRef<SVGSVGElement>(null);
   const dragging = useRef(false);
-  // When dragging inside the viewport rect, preserve the finger-to-center
-  // offset so the rect doesn't snap-jump under the finger.
   const dragOffsetFromCenter = useRef(0);
 
   const setCanvasCenter = useCallback(
@@ -197,17 +267,11 @@ export function CalendarStrip({
     }
   }
 
-  const yYear = ROW_GUTTER;
-  const yMonth = yYear + ROW_YEAR;
-  const yDay = yMonth + ROW_MONTH;
-  const yDensity = yDay + (dayNumbers.length > 0 ? ROW_DAY : 0);
-  const usableHeight = height - ROW_TODAY_LABEL;
-
-  // What month does each label fit? compact ("J" only) if narrow.
+  // Accordion: hide month labels when too narrow.
   const monthLabelMode: "full" | "letter" | "none" = (() => {
     const minW = monthEntries.reduce((acc, m) => Math.min(acc, m.w), Infinity);
     if (minW >= 22) return "full";
-    if (minW >= 8) return "letter";
+    if (minW >= 7) return "letter";
     return "none";
   })();
 
@@ -222,16 +286,16 @@ export function CalendarStrip({
       onPointerUp={onPointerEnd}
       onPointerCancel={onPointerEnd}
     >
-      <rect width={width} height={height} fill="#fcfcfd" />
+      <rect width={width} height={height} fill="#fafafa" />
 
-      {/* Month boundary gridlines — year boundaries darker */}
+      {/* Month boundary gridlines */}
       {monthEntries.map((m) => (
         <line
           key={`grid-${m.date}`}
           x1={m.x}
-          y1={yMonth}
+          y1={ROW_GUTTER + ROW_YEAR}
           x2={m.x}
-          y2={usableHeight}
+          y2={tracksBottom}
           stroke={m.isYearStart ? "#9ca3af" : "#e5e7eb"}
           strokeWidth={1}
           pointerEvents="none"
@@ -243,9 +307,9 @@ export function CalendarStrip({
         <text
           key={`year-${y.year}`}
           x={Math.max(4, y.x + 4)}
-          y={yYear + ROW_YEAR / 2}
+          y={ROW_GUTTER + ROW_YEAR / 2}
           dominantBaseline="central"
-          fontSize={14}
+          fontSize={13}
           fontWeight={700}
           fill="#0f1217"
           pointerEvents="none"
@@ -254,76 +318,116 @@ export function CalendarStrip({
         </text>
       ))}
 
-      {/* Month labels (accordion: full / single-letter / hidden) */}
+      {/* Month labels */}
       {monthLabelMode !== "none" &&
         monthEntries.map((m) => (
           <text
             key={`mlabel-${m.date}`}
             x={m.x + (monthLabelMode === "full" ? 4 : Math.max(2, m.w / 2 - 3))}
-            y={yMonth + ROW_MONTH / 2}
+            y={ROW_GUTTER + ROW_YEAR + ROW_MONTH / 2}
             dominantBaseline="central"
             textAnchor={monthLabelMode === "letter" ? "middle" : "start"}
-            fontSize={monthLabelMode === "full" ? 12 : 10}
+            fontSize={monthLabelMode === "full" ? 11 : 9}
             fontWeight={600}
-            fill="#374151"
+            fill="#4b5563"
             pointerEvents="none"
           >
             {monthLabelMode === "full" ? m.label : m.letter}
           </text>
         ))}
 
-      {/* Day numbers (Mondays only, skipped when too cramped) */}
-      {dayNumbers.map((d) => (
-        <text
-          key={`day-${d.date}`}
-          x={d.x + 2}
-          y={yDay + ROW_DAY / 2}
-          dominantBaseline="central"
-          fontSize={10}
-          fontWeight={d.isMonthStart ? 700 : 500}
-          fill={d.isMonthStart ? "#111827" : "#6b7280"}
-          pointerEvents="none"
-        >
-          {d.day}
-        </text>
-      ))}
+      {/* Track separator lines */}
+      {orderedTracks.map((_, i) => {
+        if (i === 0) return null;
+        const y = tracksTop + i * rowHeight;
+        return (
+          <line
+            key={`tsep-${i}`}
+            x1={0}
+            y1={y}
+            x2={width}
+            y2={y}
+            stroke="#f1f5f9"
+            pointerEvents="none"
+          />
+        );
+      })}
 
-      {/* Density: clip starts colored by track */}
-      {densityMarks.map((d, i) => (
-        <line
-          key={i}
-          x1={d.x}
-          y1={yDensity + 2}
-          x2={d.x}
-          y2={yDensity + ROW_DENSITY - 2}
-          stroke={d.color}
-          strokeWidth={2.5}
-          opacity={0.85}
-          pointerEvents="none"
-        />
-      ))}
+      {/* Mini clip shapes — the GarageBand "notes" */}
+      {clipShapes.map((s) => {
+        const opacity = s.dim ? 0.25 : 0.9;
+        if (s.kind === "stem") {
+          return (
+            <line
+              key={s.key}
+              x1={s.x}
+              y1={s.y + 1}
+              x2={s.x + s.w}
+              y2={s.y + 1}
+              stroke={s.color}
+              strokeWidth={2}
+              opacity={opacity}
+              pointerEvents="none"
+            />
+          );
+        }
+        if (s.kind === "flag") {
+          return (
+            <line
+              key={s.key}
+              x1={s.x}
+              y1={s.y}
+              x2={s.x}
+              y2={s.y + s.h}
+              stroke={s.color}
+              strokeWidth={1.5}
+              opacity={opacity}
+              pointerEvents="none"
+            />
+          );
+        }
+        // task / event
+        return (
+          <rect
+            key={s.key}
+            x={s.x}
+            y={s.y}
+            width={s.w}
+            height={s.h}
+            rx={Math.min(2, s.h / 2)}
+            fill={s.color}
+            opacity={opacity}
+            pointerEvents="none"
+          />
+        );
+      })}
 
-      {/* Viewport rectangle — the user's "where am I on the canvas" affordance */}
+      {/* Viewport rectangle */}
       <rect
         x={Math.max(0, vpX1)}
-        y={ROW_GUTTER}
+        y={tracksTop - 2}
         width={Math.max(0, Math.min(width, vpX2) - Math.max(0, vpX1))}
-        height={usableHeight - ROW_GUTTER}
+        height={tracksBottom - tracksTop + 4}
         fill="#7c3aed"
         fillOpacity={0.10}
         stroke="#6d28d9"
         strokeWidth={1.5}
-        rx={8}
+        rx={6}
         pointerEvents="none"
       />
-      <circle cx={vpX1 + 4} cy={usableHeight / 2 + ROW_GUTTER} r={2.5} fill="#6d28d9" pointerEvents="none" />
-      <circle cx={vpX2 - 4} cy={usableHeight / 2 + ROW_GUTTER} r={2.5} fill="#6d28d9" pointerEvents="none" />
 
-      {/* Today line + pill at the bottom */}
-      {todayX >= -10 && todayX <= width + 10 ? (
+      {/* Today line + pill */}
+      {todayX >= -8 && todayX <= width + 8 ? (
         <g pointerEvents="none">
-          <line x1={todayX} y1={0} x2={todayX} y2={usableHeight} stroke="#e11d48" strokeWidth={2} />
-          <rect x={todayX - 24} y={height - ROW_TODAY_LABEL + 1} width={48} height={ROW_TODAY_LABEL - 2} rx={7} fill="#e11d48" />
+          <line x1={todayX} y1={0} x2={todayX} y2={tracksBottom} stroke="#e11d48" strokeWidth={2} />
+          <rect
+            x={todayX - 24}
+            y={height - ROW_TODAY_LABEL + 1}
+            width={48}
+            height={ROW_TODAY_LABEL - 2}
+            rx={8}
+            fill="#e11d48"
+          />
           <text
             x={todayX}
             y={height - ROW_TODAY_LABEL / 2}

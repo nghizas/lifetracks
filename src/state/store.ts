@@ -60,6 +60,8 @@ export interface LifetracksStore {
   removeTrack: (trackId: string) => void;
   renameTrack: (trackId: string, name: string) => void;
   reorderTracks: (orderedIds: string[]) => void;
+  toggleMute: (trackId: string) => void;
+  toggleSolo: (trackId: string) => void;
 
   addClip: (input: {
     trackId: string;
@@ -185,6 +187,24 @@ export const useStore = create<LifetracksStore>((set, get) => {
       executeCommand(
         { type: "reorderTracks", orders: afterOrders },
         { type: "reorderTracks", orders: beforeOrders },
+      );
+    },
+
+    toggleMute(trackId) {
+      const before = get().roadmap.tracks.find((t) => t.id === trackId);
+      if (!before) return;
+      executeCommand(
+        { type: "patchTrack", trackId, after: { muted: !before.muted } },
+        { type: "patchTrack", trackId, after: { muted: before.muted } },
+      );
+    },
+
+    toggleSolo(trackId) {
+      const before = get().roadmap.tracks.find((t) => t.id === trackId);
+      if (!before) return;
+      executeCommand(
+        { type: "patchTrack", trackId, after: { soloed: !before.soloed } },
+        { type: "patchTrack", trackId, after: { soloed: before.soloed } },
       );
     },
 

@@ -1,5 +1,6 @@
-// Top-level timeline view. Composes track headers + SVG canvas + ruler + a
-// bottom control row (Today + zoom −/+) + fat purple minimap.
+// Top-level timeline view. Tracks + canvas at top, inline ruler, thumb-reach
+// controls (Today + discrete zoom-level popover), and the bottom calendar strip
+// that shows clips as mini-bars per track ("notes" view, GarageBand-style).
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Clip } from "@/core";
@@ -16,11 +17,8 @@ import {
   TaskBar,
   type ClipBox,
 } from "./ClipShapes";
-import {
-  clampPxPerDay,
-  screenXForDate,
-} from "./coords";
 import { CalendarStrip } from "./CalendarStrip";
+import { screenXForDate } from "./coords";
 import { LANE_HEIGHT, FLAG_LANE_HEIGHT, computeTrackLayouts } from "./layout";
 import { Ruler } from "./Ruler";
 import { TrackHeaders } from "./TrackHeaders";
@@ -32,7 +30,39 @@ const CONTROLS_HEIGHT = 52;
 const HEADER_MIN = 80;
 const HEADER_MAX = 240;
 const DIVIDER_WIDTH = 6;
-const ZOOM_FACTOR = 1.6;
+// Default canvas centering: today at 10% from left (was 25%) so the user is
+// looking primarily into the future — past is one short scroll away.
+const TODAY_LEFT_FRACTION = 0.1;
+
+// Discrete zoom levels exposed in the bottom popover. Anchoring today on
+// every level change matches the "today is home base" framing.
+interface ZoomLevel {
+  label: string;
+  pxPerDay: number;
+}
+
+const ZOOM_LEVELS: ZoomLevel[] = [
+  { label: "WEEK", pxPerDay: 28 },
+  { label: "MONTH", pxPerDay: 10 },
+  { label: "QUARTER", pxPerDay: 2.5 },
+  { label: "YEAR", pxPerDay: 0.8 },
+  { label: "3YR", pxPerDay: 0.27 },
+  { label: "5YR", pxPerDay: 0.16 },
+];
+
+function labelForPxPerDay(p: number): string {
+  // Pick the nearest level by log distance.
+  let best: ZoomLevel = ZOOM_LEVELS[0]!;
+  let bestDist = Math.abs(Math.log(p / best.pxPerDay));
+  for (const lvl of ZOOM_LEVELS) {
+    const d = Math.abs(Math.log(p / lvl.pxPerDay));
+    if (d < bestDist) {
+      bestDist = d;
+      best = lvl;
+    }
+  }
+  return best.label;
+}
 
 export function Timeline() {
   const tracks = useStore(selectOrderedTracks);
@@ -41,17 +71,14 @@ export function Timeline() {
   const setView = useStore((s) => s.setView);
   const removeTrack = useStore((s) => s.removeTrack);
   const renameTrack = useStore((s) => s.renameTrack);
+  const toggleMute = useStore((s) => s.toggleMute);
+  const toggleSolo = useStore((s) => s.toggleSolo);
   const setSelection = useStore((s) => s.setSelection);
   const selection = useStore((s) => s.selection);
   const openSheet = useStore((s) => s.openSheet);
-  const horizonYears = useStore((s) => s.roadmap.settings.horizonYears);
 
   const today = todayStr();
   const origin = useMemo(() => addMonths(today, -60), [today]);
-  const horizonEnd = useMemo(
-    () => addMonths(today, horizonYears * 12),
-    [today, horizonYears],
-  );
 
   const layout = useMemo(() => computeTrackLayouts(tracks, clips), [tracks, clips]);
 
@@ -59,6 +86,7 @@ export function Timeline() {
   const [canvasWidth, setCanvasWidth] = useState(300);
   const [canvasHeight, setCanvasHeight] = useState(400);
   const [verticalScroll, setVerticalScroll] = useState(0);
+  const [zoomMenuOpen, setZoomMenuOpen] = useState(false);
 
   useLayoutEffect(() => {
     const el = canvasRef.current;
@@ -74,28 +102,23 @@ export function Timeline() {
     return () => ro.disconnect();
   }, []);
 
-  // Jumps the viewport so today sits ~25% from the left.
   const jumpToToday = () => {
-    const targetScroll = daysBetween(origin, today) * view.pxPerDay - canvasWidth * 0.25;
+    const targetScroll =
+      daysBetween(origin, today) * view.pxPerDay - canvasWidth * TODAY_LEFT_FRACTION;
     setView({ scrollX: targetScroll });
   };
 
-  const zoomAtCenter = (factor: number) => {
-    const anchorScreenX = canvasWidth / 2;
-    const anchorWorld = anchorScreenX + view.scrollX;
-    const newPxPerDay = clampPxPerDay(view.pxPerDay * factor);
-    const scale = newPxPerDay / view.pxPerDay;
-    setView({
-      pxPerDay: newPxPerDay,
-      scrollX: anchorWorld * scale - anchorScreenX,
-    });
+  const setZoomLevel = (pxPerDay: number) => {
+    const targetScroll = daysBetween(origin, today) * pxPerDay - canvasWidth * TODAY_LEFT_FRACTION;
+    setView({ pxPerDay, scrollX: targetScroll });
+    setZoomMenuOpen(false);
   };
 
   const centeredRef = useRef(false);
   useEffect(() => {
     if (centeredRef.current || canvasWidth <= 0) return;
     centeredRef.current = true;
-    const targetScroll = daysBetween(origin, today) * view.pxPerDay - canvasWidth * 0.25;
+    const targetScroll = daysBetween(origin, today) * view.pxPerDay - canvasWidth * TODAY_LEFT_FRACTION;
     setView({ scrollX: targetScroll });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvasWidth]);
@@ -126,13 +149,17 @@ export function Timeline() {
     return lines;
   }, [origin, view.scrollX, view.pxPerDay, canvasWidth]);
 
+  const anySoloed = tracks.some((t) => t.soloed);
+
   const boxes = useMemo(() => {
-    const out: { clip: Clip; box: ClipBox; color: string }[] = [];
-    const trackColor = new Map(tracks.map((t) => [t.id, t.color]));
+    const out: { clip: Clip; box: ClipBox; color: string; dim: boolean }[] = [];
+    const trackMeta = new Map(tracks.map((t) => [t.id, t]));
     for (const c of clips) {
       const lay = layout.layouts.get(c.trackId);
-      if (!lay) continue;
-      const color = trackColor.get(c.trackId) ?? "#5b8def";
+      const t = trackMeta.get(c.trackId);
+      if (!lay || !t) continue;
+      const color = t.color;
+      const dim = anySoloed ? !t.soloed : t.muted;
       const sx = (d: string) => screenXForDate(origin, d, view.pxPerDay, view.scrollX);
 
       if (lay.collapsed) {
@@ -144,7 +171,7 @@ export function Timeline() {
               ? c.recurrence?.until ?? c.start
               : c.start;
         const w = c.kind === "task" || c.kind === "stem" ? Math.max(2, sx(endIso) - x) : 4;
-        out.push({ clip: c, color, box: { x, y: lay.yStart + 4, w, h: lay.height - 8 } });
+        out.push({ clip: c, color, dim, box: { x, y: lay.yStart + 4, w, h: lay.height - 8 } });
         continue;
       }
 
@@ -153,6 +180,7 @@ export function Timeline() {
         out.push({
           clip: c,
           color,
+          dim,
           box: { x: sx(c.start), y: lay.flagLaneY, w: 8, h: FLAG_LANE_HEIGHT },
         });
         continue;
@@ -163,7 +191,7 @@ export function Timeline() {
         const y = lay.stemLaneStartY + sub * LANE_HEIGHT;
         const x = sx(c.start);
         const w = Math.max(8, sx(c.recurrence?.until ?? addMonths(c.start, 6)) - x);
-        out.push({ clip: c, color, box: { x, y, w, h: LANE_HEIGHT } });
+        out.push({ clip: c, color, dim, box: { x, y, w, h: LANE_HEIGHT } });
         continue;
       }
 
@@ -172,38 +200,39 @@ export function Timeline() {
       if (c.kind === "task") {
         const x = sx(c.start);
         const w = Math.max(8, sx(c.end ?? c.start) - x);
-        out.push({ clip: c, color, box: { x, y, w, h: LANE_HEIGHT } });
+        out.push({ clip: c, color, dim, box: { x, y, w, h: LANE_HEIGHT } });
       } else {
-        out.push({ clip: c, color, box: { x: sx(c.start), y, w: 0, h: LANE_HEIGHT } });
+        out.push({ clip: c, color, dim, box: { x: sx(c.start), y, w: 0, h: LANE_HEIGHT } });
       }
     }
     return out;
-  }, [clips, layout, origin, view.pxPerDay, view.scrollX, tracks]);
+  }, [clips, layout, origin, view.pxPerDay, view.scrollX, tracks, anySoloed]);
 
   const eventZones = useMemo(() => {
-    const zones: { id: string; x: number; y: number; w: number; color: string }[] = [];
-    const trackColor = new Map(tracks.map((t) => [t.id, t.color]));
+    const zones: { id: string; x: number; y: number; w: number; color: string; dim: boolean }[] = [];
+    const trackMeta = new Map(tracks.map((t) => [t.id, t]));
     const sx = (d: string) => screenXForDate(origin, d, view.pxPerDay, view.scrollX);
     for (const c of clips) {
       if (c.kind !== "event" || !c.disruption) continue;
       const lay = layout.layouts.get(c.trackId);
-      if (!lay || lay.collapsed) continue;
+      const t = trackMeta.get(c.trackId);
+      if (!lay || !t || lay.collapsed) continue;
       const sub = lay.taskAssignments.get(c.id) ?? 0;
       const y = lay.taskLaneStartY + sub * LANE_HEIGHT;
       const zStart = addMonths(c.start, -c.disruption.monthsBefore);
       const zEnd = addMonths(c.start, c.disruption.monthsAfter);
       const x = sx(zStart);
       const w = sx(zEnd) - x;
-      zones.push({ id: c.id, x, y, w, color: trackColor.get(c.trackId) ?? "#5b8def" });
+      const dim = anySoloed ? !t.soloed : t.muted;
+      zones.push({ id: c.id, x, y, w, color: t.color, dim });
     }
     return zones;
-  }, [clips, layout, origin, view.pxPerDay, view.scrollX, tracks]);
+  }, [clips, layout, origin, view.pxPerDay, view.scrollX, tracks, anySoloed]);
 
   const todayX = screenXForDate(origin, today, view.pxPerDay, view.scrollX);
   const svgHeight = Math.max(layout.totalHeight, canvasHeight);
-  // Width of the full app shell that the calendar strip should span (canvas + header column + divider).
   const stripWidth = canvasWidth + view.headerWidth + DIVIDER_WIDTH;
-  void horizonEnd;
+  const zoomLabel = labelForPxPerDay(view.pxPerDay);
 
   function onDividerPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     e.preventDefault();
@@ -223,8 +252,6 @@ export function Timeline() {
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onUp);
   }
-
-  const zoomLabel = labelForZoom(view.pxPerDay);
 
   return (
     <div className="flex h-full flex-col">
@@ -251,6 +278,8 @@ export function Timeline() {
               onAddClipToTrack={(id) =>
                 openSheet({ kind: "new-clip", defaults: { trackId: id } })
               }
+              onToggleMute={toggleMute}
+              onToggleSolo={toggleSolo}
             />
           </div>
         </div>
@@ -287,7 +316,7 @@ export function Timeline() {
                   x2={m.x}
                   y2={svgHeight}
                   stroke={m.isYearStart ? "#d1d5db" : "#f3f4f6"}
-                  strokeWidth={m.isYearStart ? 1 : 1}
+                  strokeWidth={1}
                   pointerEvents="none"
                 />
               ))}
@@ -313,27 +342,37 @@ export function Timeline() {
                   width={Math.max(0, z.w)}
                   height={LANE_HEIGHT - 4}
                   fill={z.color}
-                  opacity={0.12}
+                  opacity={z.dim ? 0.05 : 0.12}
                   rx={4}
                 />
               ))}
-              {boxes.map(({ clip, box, color }) => {
+              {boxes.map(({ clip, box, color, dim }) => {
                 const isSelected =
                   selection?.kind === "clip" && selection.id === clip.id;
                 const onClick = () => {
                   setSelection({ kind: "clip", id: clip.id });
                   openSheet({ kind: "edit-clip", clipId: clip.id });
                 };
-                switch (clip.kind) {
-                  case "task":
-                    return <TaskBar key={clip.id} clip={clip} trackColor={color} box={box} selected={isSelected} onClick={onClick} />;
-                  case "stem":
-                    return <StemBar key={clip.id} clip={clip} trackColor={color} box={box} selected={isSelected} onClick={onClick} />;
-                  case "event":
-                    return <EventDiamond key={clip.id} clip={clip} trackColor={color} box={box} selected={isSelected} onClick={onClick} />;
-                  case "flag":
-                    return <FlagMarker key={clip.id} clip={clip} trackColor={color} box={box} selected={isSelected} onClick={onClick} />;
+                const group = (() => {
+                  switch (clip.kind) {
+                    case "task":
+                      return <TaskBar key={clip.id} clip={clip} trackColor={color} box={box} selected={isSelected} onClick={onClick} />;
+                    case "stem":
+                      return <StemBar key={clip.id} clip={clip} trackColor={color} box={box} selected={isSelected} onClick={onClick} />;
+                    case "event":
+                      return <EventDiamond key={clip.id} clip={clip} trackColor={color} box={box} selected={isSelected} onClick={onClick} />;
+                    case "flag":
+                      return <FlagMarker key={clip.id} clip={clip} trackColor={color} box={box} selected={isSelected} onClick={onClick} />;
+                  }
+                })();
+                if (dim) {
+                  return (
+                    <g key={clip.id} opacity={0.25}>
+                      {group}
+                    </g>
+                  );
                 }
+                return group;
               })}
               {todayX >= -20 && todayX <= canvasWidth + 20 ? (
                 <g pointerEvents="none">
@@ -356,7 +395,6 @@ export function Timeline() {
         </div>
       </div>
 
-      {/* Inline canvas ruler — gives the clips above an immediate date label */}
       <div
         className="flex shrink-0 border-t border-ink/5"
         style={{ height: RULER_HEIGHT }}
@@ -371,9 +409,8 @@ export function Timeline() {
         />
       </div>
 
-      {/* Thumb-reach controls: Today + zoom label + zoom buttons */}
       <div
-        className="flex shrink-0 items-center justify-between gap-2 border-t border-ink/5 bg-white px-3"
+        className="relative flex shrink-0 items-center justify-between gap-2 border-t border-ink/5 bg-white px-3"
         style={{ height: CONTROLS_HEIGHT }}
       >
         <button
@@ -384,56 +421,55 @@ export function Timeline() {
         >
           ↻ Today
         </button>
-        <div className="text-[11px] font-semibold uppercase tracking-wider text-muted">
-          {zoomLabel}
-        </div>
-        <div className="flex items-center gap-2">
+        <div className="relative">
           <button
             type="button"
-            onClick={() => zoomAtCenter(1 / ZOOM_FACTOR)}
-            className="grid h-11 w-11 place-items-center rounded-full border border-ink/15 bg-white text-[20px] leading-none"
-            aria-label="Zoom out"
+            onClick={() => setZoomMenuOpen((o) => !o)}
+            aria-haspopup="menu"
+            aria-expanded={zoomMenuOpen}
+            className="grid h-11 min-w-[6rem] place-items-center rounded-full border border-ink/15 bg-white px-4 text-[13px] font-semibold"
           >
-            −
+            {zoomLabel} ▾
           </button>
-          <button
-            type="button"
-            onClick={() => zoomAtCenter(ZOOM_FACTOR)}
-            className="grid h-11 w-11 place-items-center rounded-full border border-ink/15 bg-white text-[20px] leading-none"
-            aria-label="Zoom in"
-          >
-            +
-          </button>
+          {zoomMenuOpen ? (
+            <div
+              role="menu"
+              className="absolute bottom-full right-0 mb-2 w-32 overflow-hidden rounded-xl border border-ink/10 bg-white shadow-xl"
+            >
+              {ZOOM_LEVELS.map((lvl) => {
+                const active = labelForPxPerDay(view.pxPerDay) === lvl.label;
+                return (
+                  <button
+                    key={lvl.label}
+                    type="button"
+                    onClick={() => setZoomLevel(lvl.pxPerDay)}
+                    className={`block w-full px-4 py-2.5 text-left text-[13px] font-semibold ${
+                      active ? "bg-ink text-white" : "text-ink hover:bg-ink/5"
+                    }`}
+                  >
+                    {lvl.label}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
         </div>
       </div>
 
-      {/* The differentiator: an accordion calendar at the bottom that *is* the
-          primary navigation surface, GarageBand-style. */}
       <div className="flex shrink-0 border-t border-ink/5" style={{ height: CALENDAR_HEIGHT }}>
         <CalendarStrip
           origin={origin}
           view={view}
           setView={setView}
           canvasWidth={canvasWidth}
+          tracks={tracks}
           clips={clips}
-          trackColorByClip={(c) => {
-            const t = tracks.find((tr) => tr.id === c.trackId);
-            return t?.color ?? "#5b8def";
-          }}
           width={stripWidth}
           height={CALENDAR_HEIGHT}
         />
       </div>
     </div>
   );
-}
-
-function labelForZoom(p: number): string {
-  if (p < 0.6) return "decade";
-  if (p < 2) return "year";
-  if (p < 8) return "quarter";
-  if (p < 22) return "month";
-  return "week";
 }
 
 function EmptyTimelineHint() {

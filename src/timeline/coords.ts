@@ -30,7 +30,7 @@ export function dateForScreenX(
   return addDays(origin, days);
 }
 
-export const PX_PER_DAY_MIN = 0.25;
+export const PX_PER_DAY_MIN = 0.1;
 export const PX_PER_DAY_MAX = 40;
 // 10 px/day puts the default view in the "month" ruler scale (Jan, Feb, Mar…)
 // rather than the cryptic "Q3" of the previous default. ~14 months visible on a
