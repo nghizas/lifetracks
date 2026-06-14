@@ -17,6 +17,19 @@ const CADENCES: { value: RecurrenceFreq; label: string }[] = [
   { value: "monthly", label: "Monthly" },
 ];
 
+function cadenceSummary(freq: RecurrenceFreq, count: number): string {
+  const period =
+    freq === "daily"
+      ? "day"
+      : freq === "weekly"
+        ? "week"
+        : freq === "biweekly"
+          ? "2 weeks"
+          : "month";
+  if (count === 1) return `Once per ${period}`;
+  return `${count} times per ${period}`;
+}
+
 export function NewClipSheet() {
   const sheet = useStore((s) => s.sheet);
   const open = sheet?.kind === "new-clip";
@@ -33,6 +46,7 @@ export function NewClipSheet() {
   const [trackId, setTrackId] = useState<string>("");
   const [startTime, setStartTime] = useState<string>("");
   const [cadence, setCadence] = useState<RecurrenceFreq>("weekly");
+  const [count, setCount] = useState<number>(1);
   const [until, setUntil] = useState<string>(addMonths(todayStr(), 6));
 
   useEffect(() => {
@@ -46,6 +60,7 @@ export function NewClipSheet() {
     setTrackId(defaults?.trackId ?? fallbackTrack);
     setStartTime("");
     setCadence("weekly");
+    setCount(1);
     setUntil(addMonths(initialStart, 6));
   }, [open, defaults, tracks]);
 
@@ -67,7 +82,7 @@ export function NewClipSheet() {
       start,
       end: kind === "task" ? end : null,
       recurrence:
-        kind === "stem" ? { freq: cadence, until, interval: 1 } : undefined,
+        kind === "stem" ? { freq: cadence, until, interval: 1, count } : undefined,
     });
     if (kind === "event" && startTime) {
       patchClip(created.id, { startTime });
@@ -189,6 +204,19 @@ export function NewClipSheet() {
                 </option>
               ))}
             </select>
+          </Field>
+          <Field label="Times per period">
+            <input
+              type="number"
+              min={1}
+              max={31}
+              value={count}
+              onChange={(e) => setCount(Math.max(1, Math.min(31, Number(e.target.value) || 1)))}
+              className={inputClass}
+            />
+            <div className="mt-1 text-[11px] text-muted">
+              {cadenceSummary(cadence, count)}
+            </div>
           </Field>
           <Field label="Until">
             <input

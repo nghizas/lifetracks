@@ -31,6 +31,8 @@ export const RecurrenceSchema = z.object({
   freq: RecurrenceFreqSchema,
   until: isoDate,
   interval: z.number().int().positive().default(1),
+  /** Number of occurrences per period (e.g. "3 per week"). Defaults to 1. */
+  count: z.number().int().min(1).max(31).default(1),
 });
 export type Recurrence = z.infer<typeof RecurrenceSchema>;
 

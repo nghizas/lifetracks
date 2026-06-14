@@ -72,7 +72,12 @@ export interface LifetracksStore {
     start: string;
     end?: string | null;
     effort?: number;
-    recurrence?: { freq: "daily" | "weekly" | "biweekly" | "monthly"; until: string; interval?: number };
+    recurrence?: {
+      freq: "daily" | "weekly" | "biweekly" | "monthly";
+      until: string;
+      interval?: number;
+      count?: number;
+    };
   }) => Clip;
   removeClip: (clipId: string) => void;
   patchClip: (clipId: string, changes: Partial<Omit<Clip, "id">>) => void;

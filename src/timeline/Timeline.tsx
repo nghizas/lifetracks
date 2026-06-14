@@ -376,6 +376,7 @@ export function Timeline() {
             <TrackLabelOverlay
               tracks={tracks}
               layout={layout}
+              canvasRef={canvasRef}
               onEditTrack={(id) => openSheet({ kind: "edit-track", trackId: id })}
               onAddClipToTrack={(id) =>
                 openSheet({ kind: "new-clip", defaults: { trackId: id } })

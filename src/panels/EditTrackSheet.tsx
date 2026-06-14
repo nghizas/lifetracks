@@ -9,7 +9,6 @@ export function EditTrackSheet() {
   const closeSheet = useStore((s) => s.closeSheet);
   const patchTrack = useStore((s) => s.patchTrack);
   const removeTrack = useStore((s) => s.removeTrack);
-  const reorderTracks = useStore((s) => s.reorderTracks);
   const orderedTracks = useStore(selectOrderedTracks);
 
   const track = useMemo(
@@ -20,48 +19,24 @@ export function EditTrackSheet() {
   const [name, setName] = useState("");
   const [color, setColor] = useState<string>(PALETTE[0]!);
   const [notes, setNotes] = useState("");
-  const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
     if (!open || !track) return;
     setName(track.name);
     setColor(track.color);
     setNotes(track.notes);
-    setCollapsed(track.collapsed);
   }, [open, track]);
 
   if (!open || !track) {
     return <Sheet open={false} onClose={closeSheet}>{null}</Sheet>;
   }
 
-  const position = orderedTracks.findIndex((t) => t.id === track.id);
-  const canMoveUp = position > 0;
-  const canMoveDown = position >= 0 && position < orderedTracks.length - 1;
-
   function save() {
     if (!track) return;
     const t = name.trim();
     if (!t) return;
-    patchTrack(track.id, { name: t, color, notes, collapsed });
+    patchTrack(track.id, { name: t, color, notes });
     closeSheet();
-  }
-
-  function moveUp() {
-    if (!canMoveUp) return;
-    const swapped = orderedTracks.slice();
-    const tmp = swapped[position - 1]!;
-    swapped[position - 1] = swapped[position]!;
-    swapped[position] = tmp;
-    reorderTracks(swapped.map((t) => t.id));
-  }
-
-  function moveDown() {
-    if (!canMoveDown) return;
-    const swapped = orderedTracks.slice();
-    const tmp = swapped[position + 1]!;
-    swapped[position + 1] = swapped[position]!;
-    swapped[position] = tmp;
-    reorderTracks(swapped.map((t) => t.id));
   }
 
   function del() {
@@ -124,46 +99,9 @@ export function EditTrackSheet() {
         />
       </Field>
 
-      <Field label="Position">
-        <div className="flex items-center gap-2">
-          <span className="text-[12px] text-muted">
-            {position + 1} of {orderedTracks.length}
-          </span>
-          <button
-            type="button"
-            onClick={moveUp}
-            disabled={!canMoveUp}
-            className="ml-auto h-9 rounded-md border border-ink/15 px-3 text-[12px] font-semibold disabled:opacity-30"
-          >
-            ↑ Move up
-          </button>
-          <button
-            type="button"
-            onClick={moveDown}
-            disabled={!canMoveDown}
-            className="h-9 rounded-md border border-ink/15 px-3 text-[12px] font-semibold disabled:opacity-30"
-          >
-            ↓ Move down
-          </button>
-        </div>
-      </Field>
-
-      <Field label="Display">
-        <label className="flex cursor-pointer items-center gap-2 rounded-md border border-ink/10 p-3">
-          <input
-            type="checkbox"
-            checked={collapsed}
-            onChange={(e) => setCollapsed(e.target.checked)}
-            className="h-4 w-4"
-          />
-          <span className="text-sm">
-            <span className="font-medium">Collapse</span>
-            <span className="ml-1 text-[11px] text-muted">
-              hide clips, show just the label row
-            </span>
-          </span>
-        </label>
-      </Field>
+      <div className="rounded-md bg-ink/[0.03] px-3 py-2 text-[11px] text-muted">
+        Long-press a track name on the canvas to drag and reorder.
+      </div>
 
       <button
         type="button"

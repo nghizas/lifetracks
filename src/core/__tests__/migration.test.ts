@@ -126,7 +126,7 @@ describe("migrateV2 round-trip", () => {
     expect(promo.end).toBe("2026-12-01");
     expect(promo.effort).toBe(4);
     const walk = byId.get("c-walk")!;
-    expect(walk.recurrence).toEqual({ freq: "weekly", until: "2027-06-15", interval: 1 });
+    expect(walk.recurrence).toEqual({ freq: "weekly", until: "2027-06-15", interval: 1, count: 1 });
     const baby = byId.get("c-baby")!;
     expect(baby.disruption).toEqual({
       monthsBefore: 1,

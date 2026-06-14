@@ -65,7 +65,13 @@ export function useTouchPanZoom(
 
       if (pointers.size === 1) {
         const dx = e.clientX - prev.x;
+        const dy = e.clientY - prev.y;
         setViewRef.current({ scrollX: viewRef.current.scrollX - dx });
+        // Vertical scroll on the canvas element itself — touch-action: none
+        // blocks native handling, so we mirror it here.
+        if (dy !== 0) {
+          el!.scrollTop -= dy;
+        }
       } else if (pointers.size === 2 && pinchStartDist > 0) {
         const pts = Array.from(pointers.values());
         const a = pts[0];
@@ -90,10 +96,10 @@ export function useTouchPanZoom(
     }
 
     function onWheel(e: WheelEvent): void {
-      e.preventDefault();
       const left = canvasLeft();
       if (e.ctrlKey || e.metaKey) {
         // Anchor-at-cursor zoom (trackpad pinch on macOS sends ctrlKey).
+        e.preventDefault();
         const anchorScreenX = e.clientX - left;
         const factor = Math.exp(-e.deltaY * 0.01);
         const startPxPerDay = viewRef.current.pxPerDay;
@@ -101,11 +107,16 @@ export function useTouchPanZoom(
         const anchorWorld = anchorScreenX + viewRef.current.scrollX;
         const newWorld = anchorWorld * (newPxPerDay / startPxPerDay);
         setViewRef.current({ pxPerDay: newPxPerDay, scrollX: newWorld - anchorScreenX });
-      } else {
-        // Horizontal pan. Shift+wheel maps Y to X on mice that lack X.
-        const delta = e.shiftKey ? e.deltaY : e.deltaX !== 0 ? e.deltaX : e.deltaY;
-        setViewRef.current({ scrollX: viewRef.current.scrollX + delta });
+        return;
       }
+      if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+        // Horizontal pan
+        e.preventDefault();
+        const delta = e.shiftKey ? e.deltaY : e.deltaX;
+        setViewRef.current({ scrollX: viewRef.current.scrollX + delta });
+        return;
+      }
+      // Vertical wheel passes through — native scroll on the canvas element.
     }
 
     el.addEventListener("pointerdown", onPointerDown);

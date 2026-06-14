@@ -20,6 +20,19 @@ const CADENCES: { value: RecurrenceFreq; label: string }[] = [
   { value: "monthly", label: "Monthly" },
 ];
 
+function cadenceSummary(freq: RecurrenceFreq, count: number): string {
+  const period =
+    freq === "daily"
+      ? "day"
+      : freq === "weekly"
+        ? "week"
+        : freq === "biweekly"
+          ? "2 weeks"
+          : "month";
+  if (count === 1) return `Once per ${period}`;
+  return `${count} times per ${period}`;
+}
+
 export function EditClipSheet() {
   const sheet = useStore((s) => s.sheet);
   const open = sheet?.kind === "edit-clip";
@@ -39,6 +52,7 @@ export function EditClipSheet() {
   const [status, setStatus] = useState<ClipStatus>("planned");
   const [startTime, setStartTime] = useState<string>("");
   const [cadence, setCadence] = useState<RecurrenceFreq>("weekly");
+  const [count, setCount] = useState<number>(1);
   const [until, setUntil] = useState<string>("");
 
   useEffect(() => {
@@ -50,6 +64,7 @@ export function EditClipSheet() {
     setStatus(clip.status);
     setStartTime(clip.startTime ?? "");
     setCadence(clip.recurrence?.freq ?? "weekly");
+    setCount(clip.recurrence?.count ?? 1);
     setUntil(clip.recurrence?.until ?? addMonths(clip.start, 6));
   }, [open, clip]);
 
@@ -70,7 +85,12 @@ export function EditClipSheet() {
       startTime: clip.kind === "event" ? (startTime || null) : clip.startTime,
       recurrence:
         clip.kind === "stem"
-          ? { freq: cadence, until, interval: clip.recurrence?.interval ?? 1 }
+          ? {
+              freq: cadence,
+              until,
+              interval: clip.recurrence?.interval ?? 1,
+              count,
+            }
           : clip.recurrence,
     });
     closeSheet();
@@ -163,6 +183,19 @@ export function EditClipSheet() {
                 </option>
               ))}
             </select>
+          </Field>
+          <Field label="Times per period">
+            <input
+              type="number"
+              min={1}
+              max={31}
+              value={count}
+              onChange={(e) => setCount(Math.max(1, Math.min(31, Number(e.target.value) || 1)))}
+              className={inputClass}
+            />
+            <div className="mt-1 text-[11px] text-muted">
+              {cadenceSummary(cadence, count)}
+            </div>
           </Field>
           <Field label="Until">
             <input
