@@ -1,12 +1,11 @@
 import { useEffect } from "react";
 import { useStore, selectOrderedTracks } from "@/state";
 import { Timeline } from "@/timeline";
-import { EmptyState, SheetHost, StatusBar } from "@/panels";
+import { EmptyState, SheetHost } from "@/panels";
 
-// Thumb-first toolbar: 44px-tall buttons with real text labels. Balance meter
-// was removed in the calm-over-complete pass — its bar-chart visual didn't
-// communicate a useful insight to the user, and we don't want to surface
-// sequencer judgment elsewhere yet.
+// Thumb-first toolbar: 44px-tall buttons with real text labels. Up-Next strip
+// removed in the latest pass — it was eating vertical real estate without
+// being the thing the user reaches for.
 
 export function App() {
   const ready = useStore((s) => s.ready);
@@ -103,8 +102,6 @@ export function App() {
                 </button>
               </span>
             </div>
-
-            <StatusBar />
 
             <div className="flex-1 overflow-hidden">
               <Timeline />

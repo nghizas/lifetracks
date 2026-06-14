@@ -206,15 +206,30 @@ export function NewClipSheet() {
             </select>
           </Field>
           <Field label="Times per period">
-            <input
-              type="number"
-              min={1}
-              max={31}
-              value={count}
-              onChange={(e) => setCount(Math.max(1, Math.min(31, Number(e.target.value) || 1)))}
-              className={inputClass}
-            />
-            <div className="mt-1 text-[11px] text-muted">
+            <div className="flex items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => setCount(Math.max(1, count - 1))}
+                disabled={count <= 1}
+                className="grid h-11 w-11 place-items-center rounded-full border border-ink/15 text-[20px] leading-none disabled:opacity-30"
+                aria-label="Decrease"
+              >
+                −
+              </button>
+              <div className="min-w-[3rem] text-center text-[24px] font-bold tabular-nums">
+                {count}
+              </div>
+              <button
+                type="button"
+                onClick={() => setCount(Math.min(31, count + 1))}
+                disabled={count >= 31}
+                className="grid h-11 w-11 place-items-center rounded-full border border-ink/15 text-[20px] leading-none disabled:opacity-30"
+                aria-label="Increase"
+              >
+                +
+              </button>
+            </div>
+            <div className="mt-2 text-center text-[12px] text-muted">
               {cadenceSummary(cadence, count)}
             </div>
           </Field>

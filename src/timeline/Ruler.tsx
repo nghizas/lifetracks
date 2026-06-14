@@ -76,17 +76,17 @@ function genTicks(sub: Subdivision, startISO: string, endISO: string): SubTick[]
   }
 
   if (sub === "day-number") {
-    // every 7 days from the 1st of each month: 1, 8, 15, 22, 29
+    // Days 7, 14, 21, 28 of each month — uniform four-marker breakdown.
+    // Day 1 itself gets a darker gridline (major) but no number; the lead row
+    // names the month.
     let cursor = fmtDate(start);
     while (parseDate(cursor) <= end) {
       const d = parseDate(cursor);
       const day = d.getDate();
-      if (day === 1 || day === 8 || day === 15 || day === 22 || day === 29) {
-        out.push({
-          date: cursor,
-          primary: String(day),
-          major: day === 1,
-        });
+      if (day === 1) {
+        out.push({ date: cursor, primary: "", major: true });
+      } else if (day === 7 || day === 14 || day === 21 || day === 28) {
+        out.push({ date: cursor, primary: String(day), major: false });
       }
       cursor = addDays(cursor, 1);
     }
@@ -278,7 +278,7 @@ export function Ruler({
                     {t.primary}
                   </text>
                 </>
-              ) : (
+              ) : t.primary ? (
                 <text
                   x={4}
                   y={tickRowHeight / 2 + 5}
@@ -289,7 +289,7 @@ export function Ruler({
                 >
                   {t.primary}
                 </text>
-              )}
+              ) : null}
             </g>
           );
         })}

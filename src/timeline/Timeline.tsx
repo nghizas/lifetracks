@@ -236,27 +236,6 @@ export function Timeline() {
     return out;
   }, [clips, layout, origin, view.pxPerDay, view.scrollX, tracks, anySoloed, canvasWidth]);
 
-  const eventZones = useMemo(() => {
-    const zones: { id: string; x: number; y: number; w: number; color: string; dim: boolean }[] = [];
-    const trackMeta = new Map(tracks.map((t) => [t.id, t]));
-    const sx = (d: string) => screenXForDate(origin, d, view.pxPerDay, view.scrollX);
-    for (const c of clips) {
-      if (c.kind !== "event" || !c.disruption) continue;
-      const lay = layout.layouts.get(c.trackId);
-      const t = trackMeta.get(c.trackId);
-      if (!lay || !t || lay.collapsed) continue;
-      const sub = lay.taskAssignments.get(c.id) ?? 0;
-      const y = lay.taskLaneStartY + sub * LANE_HEIGHT;
-      const zStart = addMonths(c.start, -c.disruption.monthsBefore);
-      const zEnd = addMonths(c.start, c.disruption.monthsAfter);
-      const x = sx(zStart);
-      const w = sx(zEnd) - x;
-      const dim = anySoloed ? !t.soloed : t.muted;
-      zones.push({ id: c.id, x, y, w, color: t.color, dim });
-    }
-    return zones;
-  }, [clips, layout, origin, view.pxPerDay, view.scrollX, tracks, anySoloed]);
-
   const todayX = screenXForDate(origin, today, view.pxPerDay, view.scrollX);
   const svgHeight = Math.max(layout.totalHeight, canvasHeight);
   const visibleDays = canvasWidth / view.pxPerDay;
@@ -319,18 +298,6 @@ export function Timeline() {
                   />
                 );
               })}
-              {eventZones.map((z) => (
-                <rect
-                  key={`zone-${z.id}`}
-                  x={z.x}
-                  y={z.y + 2}
-                  width={Math.max(0, z.w)}
-                  height={LANE_HEIGHT - 4}
-                  fill={z.color}
-                  opacity={z.dim ? 0.05 : 0.12}
-                  rx={4}
-                />
-              ))}
               {boxes.map(({ clip, box, color, dim, occurrenceXs }) => {
                 const isSelected =
                   selection?.kind === "clip" && selection.id === clip.id;

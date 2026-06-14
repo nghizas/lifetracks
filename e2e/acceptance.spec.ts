@@ -87,6 +87,6 @@ test("the sample-life door produces a non-empty roadmap", async ({ page }) => {
   const clipCount = await page.locator("svg [data-clip-id]").count();
   expect(clipCount).toBeGreaterThanOrEqual(10);
 
-  // The Up Next strip should surface at least one imminent clip after loading sample.
-  await expect(page.getByText(/Up next/i)).toBeVisible();
+  // Track tags should render for the three seeded tracks.
+  await expect(page.getByRole("button", { name: /^Career$/ })).toBeVisible();
 });
