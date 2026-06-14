@@ -5,7 +5,7 @@ import { selectOrderedTracks, useStore } from "@/state";
 import { Field, Sheet, inputClass } from "./Sheet";
 
 const KIND_LABEL: Record<ClipKind, string> = {
-  task: "Task",
+  task: "Span",
   event: "Event",
   stem: "Stem",
   flag: "Flag",
@@ -31,6 +31,7 @@ export function EditClipSheet() {
   const [trackId, setTrackId] = useState("");
   const [effort, setEffort] = useState(3);
   const [status, setStatus] = useState<ClipStatus>("planned");
+  const [startTime, setStartTime] = useState<string>("");
 
   useEffect(() => {
     if (!open || !clip) return;
@@ -40,6 +41,7 @@ export function EditClipSheet() {
     setTrackId(clip.trackId);
     setEffort(clip.effort);
     setStatus(clip.status);
+    setStartTime(clip.startTime ?? "");
   }, [open, clip]);
 
   if (!open || !clip) {
@@ -57,6 +59,7 @@ export function EditClipSheet() {
       trackId,
       effort,
       status,
+      startTime: clip.kind === "event" ? (startTime || null) : clip.startTime,
     });
     closeSheet();
   }
@@ -131,6 +134,20 @@ export function EditClipSheet() {
             min={start}
             className={inputClass}
           />
+        </Field>
+      ) : null}
+
+      {clip.kind === "event" ? (
+        <Field label="Time (optional)">
+          <input
+            type="time"
+            value={startTime}
+            onChange={(e) => setStartTime(e.target.value)}
+            className={inputClass}
+          />
+          <div className="mt-1 text-[11px] text-muted">
+            Leave blank for an all-day event.
+          </div>
         </Field>
       ) : null}
 

@@ -4,7 +4,7 @@ import { selectOrderedTracks, useStore } from "@/state";
 import { Field, Sheet, inputClass } from "./Sheet";
 
 const KINDS: { value: ClipKind; label: string; hint: string }[] = [
-  { value: "task", label: "Task", hint: "a span of work" },
+  { value: "task", label: "Span", hint: "a stretch of work" },
   { value: "event", label: "Event", hint: "a fixed date" },
   { value: "stem", label: "Stem", hint: "a recurring habit" },
   { value: "flag", label: "Flag", hint: "a milestone" },
@@ -16,6 +16,7 @@ export function NewClipSheet() {
   const defaults = sheet?.kind === "new-clip" ? sheet.defaults : undefined;
   const closeSheet = useStore((s) => s.closeSheet);
   const addClip = useStore((s) => s.addClip);
+  const patchClip = useStore((s) => s.patchClip);
   const tracks = useStore(selectOrderedTracks);
 
   const [kind, setKind] = useState<ClipKind>("task");
@@ -23,6 +24,7 @@ export function NewClipSheet() {
   const [start, setStart] = useState(todayStr());
   const [end, setEnd] = useState(addMonths(todayStr(), 2));
   const [trackId, setTrackId] = useState<string>("");
+  const [startTime, setStartTime] = useState<string>("");
 
   useEffect(() => {
     if (!open) return;
@@ -33,18 +35,22 @@ export function NewClipSheet() {
     setStart(initialStart);
     setEnd(addMonths(initialStart, 2));
     setTrackId(defaults?.trackId ?? fallbackTrack);
+    setStartTime("");
   }, [open, defaults, tracks]);
 
   function submit() {
     const t = title.trim();
     if (!t || !trackId) return;
-    addClip({
+    const created = addClip({
       trackId,
       kind,
       title: t,
       start,
       end: kind === "task" ? end : null,
     });
+    if (kind === "event" && startTime) {
+      patchClip(created.id, { startTime });
+    }
     closeSheet();
   }
 
@@ -145,6 +151,20 @@ export function NewClipSheet() {
             min={start}
             className={inputClass}
           />
+        </Field>
+      ) : null}
+
+      {kind === "event" ? (
+        <Field label="Time (optional)">
+          <input
+            type="time"
+            value={startTime}
+            onChange={(e) => setStartTime(e.target.value)}
+            className={inputClass}
+          />
+          <div className="mt-1 text-[11px] text-muted">
+            Leave blank for an all-day event.
+          </div>
         </Field>
       ) : null}
     </Sheet>

@@ -1,6 +1,7 @@
 // Bottom sheet — the universal editor surface on mobile (spec rule:
-// "bottom-sheet editors, never modals"). Renders as a fixed-position overlay
-// constrained to the 430px shell so it lines up on desktop too.
+// "bottom-sheet editors, never modals"). Header now always carries a × close
+// button on the left so users have an explicit escape (swipe-down still works,
+// but the tap target is easier when sheet content is tall).
 
 import { useEffect } from "react";
 import type { ReactNode } from "react";
@@ -15,7 +16,6 @@ interface Props {
 }
 
 export function Sheet({ open, onClose, title, rightAction, children }: Props) {
-  // ESC to close on desktop
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -47,12 +47,24 @@ export function Sheet({ open, onClose, title, rightAction, children }: Props) {
         style={{ paddingBottom: "max(env(safe-area-inset-bottom), 1rem)" }}
       >
         <div className="mx-auto mt-2 mb-1 h-1 w-10 rounded-full bg-ink/20" />
-        {(title || rightAction) && (
-          <div className="flex items-center justify-between border-b border-ink/5 px-5 py-3">
-            <h2 className="text-base font-semibold">{title}</h2>
-            <div>{rightAction}</div>
-          </div>
-        )}
+        <div className="flex items-center justify-between gap-3 border-b border-ink/5 px-3 py-3">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-2xl leading-none text-muted hover:bg-ink/5"
+          >
+            ×
+          </button>
+          {title ? (
+            <h2 className="min-w-0 flex-1 truncate text-base font-semibold">
+              {title}
+            </h2>
+          ) : (
+            <div className="flex-1" />
+          )}
+          {rightAction ? <div className="shrink-0">{rightAction}</div> : null}
+        </div>
         <div className="max-h-[80vh] overflow-y-auto px-5 py-4">{children}</div>
       </div>
     </div>

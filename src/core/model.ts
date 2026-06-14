@@ -70,6 +70,8 @@ export const ClipSchema = z.object({
   title: z.string(),
   notes: z.string().default(""),
   start: isoDate,
+  /** Optional time-of-day for events ("HH:MM"). Tasks/stems/flags ignore this. */
+  startTime: z.string().regex(/^\d{2}:\d{2}$/).nullable().default(null),
   end: isoDateOrNull.default(null),
   effort: z.number().int().min(1).max(5).default(3),
   dependsOn: z.array(z.string()).default([]),

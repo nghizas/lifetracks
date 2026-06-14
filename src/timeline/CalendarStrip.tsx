@@ -13,6 +13,7 @@ import {
   addMonths,
   daysBetween,
   fmtDate,
+  occurrences,
   parseDate,
   todayStr,
 } from "@/core";
@@ -136,53 +137,83 @@ export function CalendarStrip({
     return m;
   }, [visibleTracks]);
 
-  // Pre-render every clip as a mini-bar / marker on its track row.
+  // Pre-render every clip with the same shape language as the canvas above:
+  // span = rounded pill, event = diamond, stem = dotted row, flag = mark.
   const clipShapes = useMemo(() => {
-    const out: {
+    interface Span {
       key: string;
-      kind: Clip["kind"];
+      kind: "task";
       x: number;
       y: number;
       w: number;
       h: number;
       color: string;
-      dim: boolean;
-    }[] = [];
+    }
+    interface Stem {
+      key: string;
+      kind: "stem";
+      occurrenceXs: number[];
+      y: number;
+      color: string;
+    }
+    interface Event {
+      key: string;
+      kind: "event";
+      cx: number;
+      cy: number;
+      r: number;
+      color: string;
+    }
+    interface Flag {
+      key: string;
+      kind: "flag";
+      x: number;
+      y: number;
+      h: number;
+      color: string;
+    }
+    const out: (Span | Stem | Event | Flag)[] = [];
     for (const c of clips) {
       const ti = trackIndex.get(c.trackId);
       if (ti === undefined) continue;
       const track = visibleTracks[ti]!;
-      const dim = false; // visibleTracks already filters out hidden tracks
       const yTop = tracksTop + ti * rowHeight + 2;
       const yH = Math.max(3, rowHeight - 4);
       const xStart = sxForDate(c.start);
       switch (c.kind) {
         case "task": {
           const xEnd = sxForDate(c.end ?? c.start);
+          const w = Math.max(3, xEnd - xStart);
           out.push({
             key: c.id,
             kind: "task",
             x: xStart,
             y: yTop,
-            w: Math.max(2, xEnd - xStart),
+            w,
             h: yH,
             color: track.color,
-            dim,
           });
           break;
         }
         case "stem": {
-          const until = c.recurrence?.until ?? addMonths(c.start, 6);
-          const xEnd = sxForDate(until);
+          if (!c.recurrence) break;
+          const dates = occurrences(c.start, c.recurrence, c.recurrence.until);
+          const xs: number[] = [];
+          let last = -Infinity;
+          for (const d of dates) {
+            const x = sxForDate(d);
+            if (x < -4 || x > width + 4) continue;
+            if (x - last >= 4) {
+              xs.push(x);
+              last = x;
+            }
+          }
           out.push({
             key: c.id,
             kind: "stem",
-            x: xStart,
-            y: yTop + yH / 2 - 1,
-            w: Math.max(2, xEnd - xStart),
-            h: 2,
+            occurrenceXs: xs,
+            y: yTop + yH / 2,
             color: track.color,
-            dim,
           });
           break;
         }
@@ -190,12 +221,10 @@ export function CalendarStrip({
           out.push({
             key: c.id,
             kind: "event",
-            x: xStart - 3,
-            y: yTop,
-            w: 6,
-            h: yH,
+            cx: xStart,
+            cy: yTop + yH / 2,
+            r: Math.min(4, yH / 2 - 0.5),
             color: track.color,
-            dim,
           });
           break;
         }
@@ -205,17 +234,15 @@ export function CalendarStrip({
             kind: "flag",
             x: xStart,
             y: yTop,
-            w: 1.5,
             h: yH,
             color: track.color,
-            dim,
           });
           break;
         }
       }
     }
     return out;
-  }, [clips, visibleTracks, trackIndex, sxForDate, rowHeight, tracksTop]);
+  }, [clips, visibleTracks, trackIndex, sxForDate, rowHeight, tracksTop, width]);
 
   const todayX = sxForDate(today);
 
@@ -355,40 +382,41 @@ export function CalendarStrip({
         );
       })}
 
-      {/* Mini clip shapes — the GarageBand "notes" */}
+      {/* Mini clip shapes — same shape language as the canvas above */}
       {clipShapes.map((s) => {
-        const opacity = s.dim ? 0.25 : 0.9;
         if (s.kind === "stem") {
           return (
-            <line
+            <g key={s.key} pointerEvents="none">
+              {s.occurrenceXs.map((x, i) => (
+                <circle key={i} cx={x} cy={s.y} r={1.6} fill={s.color} opacity={0.9} />
+              ))}
+            </g>
+          );
+        }
+        if (s.kind === "event") {
+          const { cx, cy, r, color } = s;
+          return (
+            <polygon
               key={s.key}
-              x1={s.x}
-              y1={s.y + 1}
-              x2={s.x + s.w}
-              y2={s.y + 1}
-              stroke={s.color}
-              strokeWidth={2}
-              opacity={opacity}
+              points={`${cx},${cy - r} ${cx + r},${cy} ${cx},${cy + r} ${cx - r},${cy}`}
+              fill={color}
+              opacity={0.95}
               pointerEvents="none"
             />
           );
         }
         if (s.kind === "flag") {
           return (
-            <line
-              key={s.key}
-              x1={s.x}
-              y1={s.y}
-              x2={s.x}
-              y2={s.y + s.h}
-              stroke={s.color}
-              strokeWidth={1.5}
-              opacity={opacity}
-              pointerEvents="none"
-            />
+            <g key={s.key} pointerEvents="none">
+              <line x1={s.x} y1={s.y} x2={s.x} y2={s.y + s.h} stroke={s.color} strokeWidth={1.5} />
+              <polygon
+                points={`${s.x},${s.y} ${s.x + 5},${s.y + 2} ${s.x},${s.y + 4}`}
+                fill={s.color}
+              />
+            </g>
           );
         }
-        // task / event
+        // span
         return (
           <rect
             key={s.key}
@@ -398,7 +426,7 @@ export function CalendarStrip({
             height={s.h}
             rx={Math.min(2, s.h / 2)}
             fill={s.color}
-            opacity={opacity}
+            opacity={0.9}
             pointerEvents="none"
           />
         );

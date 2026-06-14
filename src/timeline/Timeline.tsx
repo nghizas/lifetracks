@@ -5,7 +5,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Clip } from "@/core";
-import { addDays, addMonths, daysBetween, fmtDate, parseDate, todayStr } from "@/core";
+import { addDays, addMonths, daysBetween, fmtDate, occurrences, parseDate, todayStr } from "@/core";
 import {
   selectClips,
   selectOrderedTracks,
@@ -57,6 +57,24 @@ function labelForPxPerDay(p: number): string {
     }
   }
   return best.label;
+}
+
+/**
+ * Clip a list of screen-x positions to the visible viewport (with margin) and
+ * thin them so consecutive entries are at least `minGap` pixels apart. Used to
+ * keep stem occurrence dots from piling up at zoomed-out scales.
+ */
+function thinXs(xs: number[], viewportW: number, minGap: number): number[] {
+  const out: number[] = [];
+  let last = -Infinity;
+  for (const x of xs) {
+    if (x < -10 || x > viewportW + 10) continue;
+    if (x - last >= minGap) {
+      out.push(x);
+      last = x;
+    }
+  }
+  return out;
 }
 
 export function Timeline() {
@@ -146,7 +164,13 @@ export function Timeline() {
   const anySoloed = tracks.some((t) => t.soloed);
 
   const boxes = useMemo(() => {
-    const out: { clip: Clip; box: ClipBox; color: string; dim: boolean }[] = [];
+    const out: {
+      clip: Clip;
+      box: ClipBox;
+      color: string;
+      dim: boolean;
+      occurrenceXs?: number[];
+    }[] = [];
     const trackMeta = new Map(tracks.map((t) => [t.id, t]));
     for (const c of clips) {
       const lay = layout.layouts.get(c.trackId);
@@ -185,7 +209,14 @@ export function Timeline() {
         const y = lay.stemLaneStartY + sub * LANE_HEIGHT;
         const x = sx(c.start);
         const w = Math.max(8, sx(c.recurrence?.until ?? addMonths(c.start, 6)) - x);
-        out.push({ clip: c, color, dim, box: { x, y, w, h: LANE_HEIGHT } });
+        const occurrenceXs = c.recurrence
+          ? thinXs(
+              occurrences(c.start, c.recurrence, c.recurrence.until).map((d) => sx(d)),
+              canvasWidth,
+              8,
+            )
+          : undefined;
+        out.push({ clip: c, color, dim, box: { x, y, w, h: LANE_HEIGHT }, occurrenceXs });
         continue;
       }
 
@@ -200,7 +231,7 @@ export function Timeline() {
       }
     }
     return out;
-  }, [clips, layout, origin, view.pxPerDay, view.scrollX, tracks, anySoloed]);
+  }, [clips, layout, origin, view.pxPerDay, view.scrollX, tracks, anySoloed, canvasWidth]);
 
   const eventZones = useMemo(() => {
     const zones: { id: string; x: number; y: number; w: number; color: string; dim: boolean }[] = [];
@@ -295,7 +326,7 @@ export function Timeline() {
                   rx={4}
                 />
               ))}
-              {boxes.map(({ clip, box, color, dim }) => {
+              {boxes.map(({ clip, box, color, dim, occurrenceXs }) => {
                 const isSelected =
                   selection?.kind === "clip" && selection.id === clip.id;
                 const onClick = () => {
@@ -307,7 +338,7 @@ export function Timeline() {
                     case "task":
                       return <TaskBar key={clip.id} clip={clip} trackColor={color} box={box} selected={isSelected} onClick={onClick} />;
                     case "stem":
-                      return <StemBar key={clip.id} clip={clip} trackColor={color} box={box} selected={isSelected} onClick={onClick} />;
+                      return <StemBar key={clip.id} clip={clip} trackColor={color} box={box} selected={isSelected} onClick={onClick} occurrenceXs={occurrenceXs} />;
                     case "event":
                       return <EventDiamond key={clip.id} clip={clip} trackColor={color} box={box} selected={isSelected} onClick={onClick} />;
                     case "flag":

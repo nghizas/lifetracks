@@ -1,12 +1,14 @@
-// SVG shape components for each clip kind.
+// SVG shape components for each clip kind. Visual rules (post-feedback):
 //
-// Post-feedback label policy (no more overlapping labels on the canvas):
-//   - task: title rendered INSIDE the bar, truncated to fit; if too narrow,
-//     no label at all (tap the clip to read the sheet)
-//   - stem: small title above the dashed line, only when there's room
-//   - event: NO label (the disruption zone + colored diamond are the identity)
-//   - flag: NO label (tap to read)
-// An optional single-emoji prefix on `clip.title` is kept as a compact glyph.
+//   - Span  (kind="task"): rounded pill bar. Minimum visible width so a
+//     one-day span still reads as a span, never collapses into a marker.
+//     Label inside, truncated to fit; hidden when too narrow (tap to read).
+//   - Stem  (kind="stem"): a thin colored baseline plus a row of filled
+//     circles at each recurrence date. The caller supplies the visible
+//     occurrence x-positions (already thinned for the current zoom).
+//   - Event (kind="event"): diamond marker. The disruption zone (if any)
+//     is drawn behind the diamond by the parent renderer. No label.
+//   - Flag  (kind="flag"): small flag pictogram. No label.
 
 import type { Clip } from "@/core";
 
@@ -25,15 +27,19 @@ interface BaseProps {
   onClick?: (e: React.PointerEvent<SVGElement>) => void;
 }
 
-const EMOJI_RE = /^(\p{Extended_Pictographic}|\p{Emoji_Presentation})/u;
+interface StemBarProps extends BaseProps {
+  /** Already-thinned screen x-positions where occurrence dots should render. */
+  occurrenceXs?: readonly number[];
+}
 
+const EMOJI_RE = /^(\p{Extended_Pictographic}|\p{Emoji_Presentation})/u;
 function splitEmoji(s: string): { emoji: string | null; rest: string } {
   const m = s.match(EMOJI_RE);
   if (!m) return { emoji: null, rest: s };
   return { emoji: m[0], rest: s.slice(m[0].length).trimStart() };
 }
 
-const CHAR_PX = 6.4; // approx avg width of an 11px sans-serif glyph
+const CHAR_PX = 6.4;
 function truncateToFit(s: string, widthPx: number): string {
   if (widthPx <= 0) return "";
   const maxChars = Math.floor(widthPx / CHAR_PX);
@@ -42,11 +48,16 @@ function truncateToFit(s: string, widthPx: number): string {
   return s.slice(0, maxChars - 1) + "…";
 }
 
+// A one-day span renders ~10px wide so it still reads as a pill (post-feedback:
+// "a little span should still look like a span, never an event marker").
+const SPAN_MIN_WIDTH = 10;
+
 export function TaskBar({ clip, trackColor, box, selected, onClick }: BaseProps) {
+  const w = Math.max(SPAN_MIN_WIDTH, box.w);
   const radius = Math.min(6, box.h / 2);
   const { emoji, rest } = splitEmoji(clip.title);
   const labelSrc = emoji ? `${emoji} ${rest}` : clip.title;
-  const innerWidth = box.w - 16;
+  const innerWidth = w - 16;
   const label = innerWidth >= 24 ? truncateToFit(labelSrc, innerWidth) : "";
   return (
     <g
@@ -54,12 +65,12 @@ export function TaskBar({ clip, trackColor, box, selected, onClick }: BaseProps)
       style={{ cursor: "pointer" }}
       data-clip-id={clip.id}
       data-clip-kind="task"
-      aria-label={`Task: ${clip.title}`}
+      aria-label={`Span: ${clip.title}`}
     >
       <rect
         x={box.x}
         y={box.y + 2}
-        width={Math.max(2, box.w)}
+        width={w}
         height={box.h - 4}
         rx={radius}
         ry={radius}
@@ -86,11 +97,19 @@ export function TaskBar({ clip, trackColor, box, selected, onClick }: BaseProps)
   );
 }
 
-export function StemBar({ clip, trackColor, box, selected, onClick }: BaseProps) {
+export function StemBar({
+  clip,
+  trackColor,
+  box,
+  selected,
+  onClick,
+  occurrenceXs = [],
+}: StemBarProps) {
   const { emoji, rest } = splitEmoji(clip.title);
-  const labelSrc = emoji ? `${emoji} ${rest}` : `↻ ${clip.title}`;
+  const labelSrc = emoji ? `${emoji} ${rest}` : clip.title;
   const innerWidth = box.w - 4;
-  const label = innerWidth >= 32 ? truncateToFit(labelSrc, innerWidth) : "";
+  const label = innerWidth >= 28 ? truncateToFit(labelSrc, innerWidth) : "";
+  const baselineY = box.y + box.h - 7;
   return (
     <g
       onPointerUp={onClick}
@@ -99,26 +118,37 @@ export function StemBar({ clip, trackColor, box, selected, onClick }: BaseProps)
       data-clip-kind="stem"
       aria-label={`Stem: ${clip.title}`}
     >
+      {/* Quiet baseline so the rhythm has a visual track, not just floating dots */}
       <line
         x1={box.x}
-        y1={box.y + box.h / 2 + 5}
+        y1={baselineY}
         x2={box.x + box.w}
-        y2={box.y + box.h / 2 + 5}
+        y2={baselineY}
         stroke={trackColor}
-        strokeWidth={2}
-        strokeDasharray="3 5"
-        opacity={0.9}
+        strokeWidth={1}
+        opacity={0.25}
       />
+      {/* Occurrence dots — one per recurrence (thinned to fit by the caller) */}
+      {occurrenceXs.map((x, i) => (
+        <circle
+          key={i}
+          cx={x}
+          cy={baselineY}
+          r={3}
+          fill={trackColor}
+          opacity={clip.status === "done" ? 0.45 : 0.9}
+        />
+      ))}
       {label ? (
         <text
           x={box.x + 2}
-          y={box.y + box.h / 2 - 2}
+          y={box.y + box.h / 2 - 4}
           fontSize={10}
-          fontWeight={500}
+          fontWeight={600}
           fill={trackColor}
           style={{ pointerEvents: "none", userSelect: "none" }}
         >
-          {label}
+          ↻ {label}
         </text>
       ) : null}
       {selected ? (
@@ -133,16 +163,16 @@ export function StemBar({ clip, trackColor, box, selected, onClick }: BaseProps)
           rx={3}
         />
       ) : null}
-      <title>{`${clip.title} (stem)`}</title>
+      <title>{`${clip.title} (stem · ${clip.recurrence?.freq ?? "weekly"})`}</title>
     </g>
   );
 }
 
 export function EventDiamond({ clip, trackColor, box, selected, onClick }: BaseProps) {
-  // No outside label — the zone + diamond are the identity. Tap to read details.
   const cx = box.x;
   const cy = box.y + box.h / 2;
-  const r = Math.min(7, box.h / 2 - 2);
+  const r = Math.min(8, box.h / 2 - 1);
+  const timeSuffix = clip.startTime ? ` ${clip.startTime}` : "";
   return (
     <g
       onPointerUp={onClick}
@@ -157,13 +187,12 @@ export function EventDiamond({ clip, trackColor, box, selected, onClick }: BaseP
         stroke={selected ? "#0f1217" : "white"}
         strokeWidth={selected ? 2 : 1}
       />
-      <title>{`${clip.title} · ${clip.start}`}</title>
+      <title>{`${clip.title} · ${clip.start}${timeSuffix}`}</title>
     </g>
   );
 }
 
 export function FlagMarker({ clip, trackColor, box, selected, onClick }: BaseProps) {
-  // No label — tap the flag to read. Visually a small flag sprite only.
   const x = box.x;
   const top = box.y + 1;
   const bot = box.y + box.h - 1;
