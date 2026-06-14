@@ -1,7 +1,13 @@
 // Bottom sheet — the universal editor surface on mobile (spec rule:
-// "bottom-sheet editors, never modals"). Header now always carries a × close
-// button on the left so users have an explicit escape (swipe-down still works,
-// but the tap target is easier when sheet content is tall).
+// "bottom-sheet editors, never modals"). Header carries a × close button on
+// the left so users have an explicit escape (swipe-down still works).
+//
+// Scroll-bleed fix: when the sheet is open we lock the documentElement's
+// overflow and overscroll-behavior so touches inside a non-overflowing sheet
+// don't bubble out and scroll the canvas underneath. The inner scroll
+// container itself uses `overscroll-contain` + `touch-action: pan-y` so
+// vertical pans stay inside the sheet boundary even when the content does
+// overflow.
 
 import { useEffect } from "react";
 import type { ReactNode } from "react";
@@ -10,12 +16,12 @@ interface Props {
   open: boolean;
   onClose: () => void;
   title?: string;
-  /** Optional right-aligned button (e.g. Save). */
   rightAction?: ReactNode;
   children: ReactNode;
 }
 
 export function Sheet({ open, onClose, title, rightAction, children }: Props) {
+  // Escape key closes
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -24,6 +30,21 @@ export function Sheet({ open, onClose, title, rightAction, children }: Props) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
+
+  // Body scroll lock while open — prevents the canvas underneath from scrolling
+  // when the user pans inside the sheet.
+  useEffect(() => {
+    if (!open) return;
+    const html = document.documentElement;
+    const prevOverflow = html.style.overflow;
+    const prevOverscroll = html.style.overscrollBehavior;
+    html.style.overflow = "hidden";
+    html.style.overscrollBehavior = "none";
+    return () => {
+      html.style.overflow = prevOverflow;
+      html.style.overscrollBehavior = prevOverscroll;
+    };
+  }, [open]);
 
   return (
     <div
@@ -65,7 +86,12 @@ export function Sheet({ open, onClose, title, rightAction, children }: Props) {
           )}
           {rightAction ? <div className="shrink-0">{rightAction}</div> : null}
         </div>
-        <div className="max-h-[80vh] overflow-y-auto px-5 py-4">{children}</div>
+        <div
+          className="max-h-[80vh] overflow-y-auto overscroll-contain px-5 py-4"
+          style={{ touchAction: "pan-y" }}
+        >
+          {children}
+        </div>
       </div>
     </div>
   );

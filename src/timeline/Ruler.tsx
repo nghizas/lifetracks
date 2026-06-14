@@ -1,16 +1,20 @@
-// Google-Calendar-style date header. The labels accordion to show the
-// subdivisions of the *current* zoom span, not just abstract tick marks:
+// Google-Calendar-style date header. Two stacked rows:
+//   1. A slim header row that names the current viewing range
+//      ("AUGUST 2026", "Q3 2026", "2026 — 2028") — never floats, always sits
+//      above the tick row.
+//   2. A tick row that shows the subdivisions of the current zoom span.
 //
-//   WEEK   (≤14 days visible) → each day, "MON / 14"
-//   MONTH  (15–60 days)       → each day's number, month-start gets a banner
-//   QUARTER(61–200 days)      → each month's name
-//   YEAR   (201–700 days)     → each month as a single letter
-//   3YR    (701–2000 days)    → each quarter ("Q1 / 2026")
-//   5YR    (>2000 days)       → each year
+// Subdivision rules (uniform tick text styling at each zoom — only gridlines
+// vary by `major`):
 //
-// Today's column is tinted at the day-level subdivisions so the playhead
-// is anchored visually. A sticky lead badge on the left always names the
-// current viewing range, like GCal's "August 2026" or "Aug 14–20".
+//   WEEK   (≤14 days) → each day, two-line "MON / 14"
+//   MONTH  (15–60)    → every 7 days from the 1st (1, 8, 15, 22, 29)
+//   QUARTER(61–200)   → each month name "Jul Aug Sep"
+//   YEAR   (201–700)  → each month as a number 1–12
+//   3YR    (701–2000) → each quarter "Q1 Q2 Q3 Q4" (uniform)
+//   5YR    (>2000)    → each year "2026 2027 …" (uniform)
+//
+// Today's column is tinted at day-level subdivisions.
 
 import { useMemo } from "react";
 import { addDays, addMonths, fmtDate, parseDate, todayStr } from "@/core";
@@ -26,18 +30,18 @@ interface Props {
 }
 
 type Subdivision =
-  | "day-full" // WEEK zoom
-  | "day-number" // MONTH zoom
-  | "month-name" // QUARTER zoom
-  | "month-letter" // YEAR zoom
-  | "quarter" // 3YR
-  | "year"; // 5YR
+  | "day-full"
+  | "day-number"
+  | "month-name"
+  | "month-number"
+  | "quarter"
+  | "year";
 
 function subdivisionFor(visibleDays: number): Subdivision {
   if (visibleDays <= 14) return "day-full";
   if (visibleDays <= 60) return "day-number";
   if (visibleDays <= 200) return "month-name";
-  if (visibleDays <= 700) return "month-letter";
+  if (visibleDays <= 700) return "month-number";
   if (visibleDays <= 2000) return "quarter";
   return "year";
 }
@@ -46,6 +50,7 @@ interface SubTick {
   date: string;
   primary: string;
   secondary?: string;
+  /** Controls gridline darkness only (text styling is uniform per subdivision). */
   major: boolean;
 }
 
@@ -54,21 +59,33 @@ function genTicks(sub: Subdivision, startISO: string, endISO: string): SubTick[]
   const end = parseDate(endISO);
   const out: SubTick[] = [];
 
-  if (sub === "day-full" || sub === "day-number") {
+  if (sub === "day-full") {
+    // every day
     let cursor = fmtDate(start);
     while (parseDate(cursor) <= end) {
       const d = parseDate(cursor);
-      const dow = d.toLocaleString(undefined, { weekday: "short" }).toUpperCase();
-      const day = String(d.getDate());
-      const isMonthStart = d.getDate() === 1;
-      if (sub === "day-full") {
-        out.push({ date: cursor, primary: day, secondary: dow, major: isMonthStart });
-      } else {
+      out.push({
+        date: cursor,
+        primary: String(d.getDate()),
+        secondary: d.toLocaleString(undefined, { weekday: "short" }).toUpperCase(),
+        major: d.getDate() === 1,
+      });
+      cursor = addDays(cursor, 1);
+    }
+    return out;
+  }
+
+  if (sub === "day-number") {
+    // every 7 days from the 1st of each month: 1, 8, 15, 22, 29
+    let cursor = fmtDate(start);
+    while (parseDate(cursor) <= end) {
+      const d = parseDate(cursor);
+      const day = d.getDate();
+      if (day === 1 || day === 8 || day === 15 || day === 22 || day === 29) {
         out.push({
           date: cursor,
-          primary: day,
-          secondary: isMonthStart ? d.toLocaleString(undefined, { month: "short" }).toUpperCase() : undefined,
-          major: isMonthStart,
+          primary: String(day),
+          major: day === 1,
         });
       }
       cursor = addDays(cursor, 1);
@@ -76,17 +93,28 @@ function genTicks(sub: Subdivision, startISO: string, endISO: string): SubTick[]
     return out;
   }
 
-  if (sub === "month-name" || sub === "month-letter") {
+  if (sub === "month-name") {
     let cursor = fmtDate(new Date(start.getFullYear(), start.getMonth(), 1));
     while (parseDate(cursor) <= end) {
       const d = parseDate(cursor);
-      const isYearStart = d.getMonth() === 0;
-      const monthShort = d.toLocaleString(undefined, { month: "short" });
       out.push({
         date: cursor,
-        primary: sub === "month-name" ? monthShort : monthShort.charAt(0),
-        secondary: isYearStart ? String(d.getFullYear()) : undefined,
-        major: isYearStart,
+        primary: d.toLocaleString(undefined, { month: "short" }),
+        major: d.getMonth() === 0,
+      });
+      cursor = addMonths(cursor, 1);
+    }
+    return out;
+  }
+
+  if (sub === "month-number") {
+    let cursor = fmtDate(new Date(start.getFullYear(), start.getMonth(), 1));
+    while (parseDate(cursor) <= end) {
+      const d = parseDate(cursor);
+      out.push({
+        date: cursor,
+        primary: String(d.getMonth() + 1),
+        major: d.getMonth() === 0,
       });
       cursor = addMonths(cursor, 1);
     }
@@ -99,12 +127,10 @@ function genTicks(sub: Subdivision, startISO: string, endISO: string): SubTick[]
       const d = parseDate(cursor);
       const m = d.getMonth() + 1;
       if (m === 1 || m === 4 || m === 7 || m === 10) {
-        const isYearStart = m === 1;
         out.push({
           date: cursor,
           primary: `Q${(m - 1) / 3 + 1}`,
-          secondary: isYearStart ? String(d.getFullYear()) : undefined,
-          major: isYearStart,
+          major: m === 1,
         });
       }
       cursor = addMonths(cursor, 1);
@@ -125,37 +151,31 @@ function leadLabelFor(
   sub: Subdivision,
   startISO: string,
   endISO: string,
-): { primary: string; secondary: string | null } {
+): string {
   const start = parseDate(startISO);
   const end = parseDate(endISO);
+
   if (sub === "day-full") {
-    const month = start.toLocaleString(undefined, { month: "short" });
+    const month = start.toLocaleString(undefined, { month: "short" }).toUpperCase();
     const sameMonth = start.getMonth() === end.getMonth();
-    return {
-      primary: sameMonth
-        ? `${month} ${start.getDate()}–${end.getDate()}`
-        : `${month} ${start.getDate()} – ${end.toLocaleString(undefined, { month: "short" })} ${end.getDate()}`,
-      secondary: String(start.getFullYear()),
-    };
+    return sameMonth
+      ? `${month} ${start.getDate()}–${end.getDate()}, ${start.getFullYear()}`
+      : `${month} ${start.getDate()} – ${end.toLocaleString(undefined, { month: "short" }).toUpperCase()} ${end.getDate()}, ${start.getFullYear()}`;
   }
   if (sub === "day-number") {
-    return {
-      primary: start.toLocaleString(undefined, { month: "long" }),
-      secondary: String(start.getFullYear()),
-    };
+    return `${start.toLocaleString(undefined, { month: "long" }).toUpperCase()} ${start.getFullYear()}`;
   }
   if (sub === "month-name") {
     const q = Math.floor(start.getMonth() / 3) + 1;
-    return { primary: `Q${q}`, secondary: String(start.getFullYear()) };
+    return `Q${q} ${start.getFullYear()}`;
   }
-  if (sub === "month-letter") {
-    return { primary: String(start.getFullYear()), secondary: null };
+  if (sub === "month-number") {
+    return String(start.getFullYear());
   }
-  return {
-    primary: `${start.getFullYear()} — ${end.getFullYear()}`,
-    secondary: null,
-  };
+  return `${start.getFullYear()} — ${end.getFullYear()}`;
 }
+
+const HEADER_ROW_HEIGHT = 22;
 
 export function Ruler({
   origin,
@@ -181,41 +201,43 @@ export function Ruler({
   const today = todayStr();
   const todayX = screenXForDate(origin, today, pxPerDay, scrollX);
   const showTodayHighlight = sub === "day-full" || sub === "day-number";
+  const tickRowHeight = height - HEADER_ROW_HEIGHT;
+  const twoLine = sub === "day-full";
 
   return (
-    <div className="relative h-full w-full bg-white">
+    <div className="flex h-full w-full flex-col bg-white">
+      {/* Header row — fixed above the tick row, left-aligned */}
       <div
-        className="pointer-events-none absolute left-2 top-1/2 z-10 -translate-y-1/2 rounded-md bg-white/95 px-2 py-1 shadow-sm ring-1 ring-ink/10"
+        className="flex shrink-0 items-center border-b border-ink/10 bg-ink/[0.02] px-3"
+        style={{ height: HEADER_ROW_HEIGHT }}
       >
-        {lead.secondary ? (
-          <div className="text-[10px] font-bold uppercase leading-none tracking-wider text-muted">
-            {lead.secondary}
-          </div>
-        ) : null}
-        <div className="text-[14px] font-bold leading-tight text-ink">
-          {lead.primary}
-        </div>
+        <span className="text-[11px] font-bold uppercase tracking-wider text-ink">
+          {lead}
+        </span>
       </div>
 
-      <svg width={width} height={height} className="block">
-        {/* Today column highlight (only at day-level subdivisions) */}
+      {/* Tick row — subdivisions of the current zoom span */}
+      <svg
+        width={width}
+        height={tickRowHeight}
+        className="block"
+      >
         {showTodayHighlight && pxPerDay > 0 ? (
           <rect
             x={todayX}
             y={0}
             width={pxPerDay}
-            height={height}
+            height={tickRowHeight}
             fill="#fef3c7"
-            opacity={0.5}
+            opacity={0.55}
           />
         ) : null}
 
-        {/* Baseline */}
         <line
           x1={0}
-          y1={height - 0.5}
+          y1={tickRowHeight - 0.5}
           x2={width}
-          y2={height - 0.5}
+          y2={tickRowHeight - 0.5}
           stroke="#e5e7eb"
         />
 
@@ -223,40 +245,51 @@ export function Ruler({
           const x = screenXForDate(origin, t.date, pxPerDay, scrollX);
           if (x < -80 || x > width + 80) return null;
           const isToday = t.date === today;
-          const fillPrimary = isToday ? "#e11d48" : t.major ? "#0f1217" : "#374151";
-          const fillSecondary = isToday ? "#e11d48" : "#6b7280";
           return (
             <g key={t.date} transform={`translate(${x}, 0)`}>
               <line
                 x1={0}
-                y1={t.major ? 0 : height - 14}
+                y1={t.major ? 0 : tickRowHeight - 12}
                 x2={0}
-                y2={height}
+                y2={tickRowHeight}
                 stroke={t.major ? "#9ca3af" : "#e5e7eb"}
                 strokeWidth={1}
               />
-              {t.secondary ? (
+              {twoLine && t.secondary ? (
+                <>
+                  <text
+                    x={4}
+                    y={11}
+                    fontSize={10}
+                    fontWeight={700}
+                    fill={isToday ? "#e11d48" : "#6b7280"}
+                    style={{ userSelect: "none" }}
+                  >
+                    {t.secondary}
+                  </text>
+                  <text
+                    x={4}
+                    y={26}
+                    fontSize={14}
+                    fontWeight={700}
+                    fill={isToday ? "#e11d48" : "#0f1217"}
+                    style={{ userSelect: "none" }}
+                  >
+                    {t.primary}
+                  </text>
+                </>
+              ) : (
                 <text
                   x={4}
-                  y={16}
-                  fontSize={10}
-                  fontWeight={700}
-                  fill={fillSecondary}
+                  y={tickRowHeight / 2 + 5}
+                  fontSize={13}
+                  fontWeight={600}
+                  fill={isToday ? "#e11d48" : "#0f1217"}
                   style={{ userSelect: "none" }}
                 >
-                  {t.secondary}
+                  {t.primary}
                 </text>
-              ) : null}
-              <text
-                x={4}
-                y={t.secondary ? height - 10 : height / 2 + 5}
-                fontSize={t.major ? 14 : 13}
-                fontWeight={t.major ? 700 : 600}
-                fill={fillPrimary}
-                style={{ userSelect: "none" }}
-              >
-                {t.primary}
-              </text>
+              )}
             </g>
           );
         })}
