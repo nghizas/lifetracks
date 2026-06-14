@@ -39,6 +39,7 @@ export type SheetState =
   | { kind: "new-track" }
   | { kind: "new-clip"; defaults?: { trackId?: string; start?: string } }
   | { kind: "edit-clip"; clipId: string }
+  | { kind: "edit-track"; trackId: string }
   | { kind: "settings" }
   | null;
 
@@ -60,6 +61,7 @@ export interface LifetracksStore {
   removeTrack: (trackId: string) => void;
   renameTrack: (trackId: string, name: string) => void;
   reorderTracks: (orderedIds: string[]) => void;
+  patchTrack: (trackId: string, changes: Partial<Omit<Track, "id">>) => void;
   toggleMute: (trackId: string) => void;
   toggleSolo: (trackId: string) => void;
 
@@ -188,6 +190,20 @@ export const useStore = create<LifetracksStore>((set, get) => {
       executeCommand(
         { type: "reorderTracks", orders: afterOrders },
         { type: "reorderTracks", orders: beforeOrders },
+      );
+    },
+
+    patchTrack(trackId, changes) {
+      const before = get().roadmap.tracks.find((t) => t.id === trackId);
+      if (!before) return;
+      const beforeSubset: Partial<Omit<Track, "id">> = {};
+      for (const k of Object.keys(changes) as (keyof Track)[]) {
+        if (k === "id") continue;
+        (beforeSubset as Record<string, unknown>)[k] = (before as Record<string, unknown>)[k];
+      }
+      executeCommand(
+        { type: "patchTrack", trackId, after: changes },
+        { type: "patchTrack", trackId, after: beforeSubset },
       );
     },
 

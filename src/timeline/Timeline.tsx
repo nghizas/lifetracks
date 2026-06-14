@@ -86,8 +86,6 @@ export function Timeline() {
   const clips = useStore(selectClips);
   const view = useStore((s) => s.view);
   const setView = useStore((s) => s.setView);
-  const removeTrack = useStore((s) => s.removeTrack);
-  const renameTrack = useStore((s) => s.renameTrack);
   const toggleMute = useStore((s) => s.toggleMute);
   const toggleSolo = useStore((s) => s.toggleSolo);
   const setSelection = useStore((s) => s.setSelection);
@@ -378,10 +376,7 @@ export function Timeline() {
             <TrackLabelOverlay
               tracks={tracks}
               layout={layout}
-              onRemoveTrack={(id) => {
-                if (window.confirm("Delete this track and its clips?")) removeTrack(id);
-              }}
-              onRenameTrack={renameTrack}
+              onEditTrack={(id) => openSheet({ kind: "edit-track", trackId: id })}
               onAddClipToTrack={(id) =>
                 openSheet({ kind: "new-clip", defaults: { trackId: id } })
               }

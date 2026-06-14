@@ -1,7 +1,8 @@
 // Track tag overlay. The label sits in the dedicated label row at the top of
 // each track (reserved by `computeTrackLayouts`), so clips never visually
-// overlap the label. Opaque background — no transparency or blur needed any
-// more. The `+` add-clip button is a colored disc filled with the track color.
+// overlap the label. Tapping the name opens the full EditTrackSheet (rename,
+// color, notes, reorder, collapse, delete) — the `window.prompt` shortcut is
+// gone now that the sheet exists.
 
 import type { Track } from "@/core";
 import { type LayoutResult, LABEL_ROW_HEIGHT } from "./layout";
@@ -9,8 +10,7 @@ import { type LayoutResult, LABEL_ROW_HEIGHT } from "./layout";
 interface Props {
   tracks: readonly Track[];
   layout: LayoutResult;
-  onRemoveTrack?: (id: string) => void;
-  onRenameTrack?: (id: string, name: string) => void;
+  onEditTrack?: (id: string) => void;
   onAddClipToTrack?: (id: string) => void;
   onToggleMute?: (id: string) => void;
   onToggleSolo?: (id: string) => void;
@@ -19,8 +19,7 @@ interface Props {
 export function TrackLabelOverlay({
   tracks,
   layout,
-  onRemoveTrack,
-  onRenameTrack,
+  onEditTrack,
   onAddClipToTrack,
   onToggleMute,
   onToggleSolo,
@@ -50,19 +49,9 @@ export function TrackLabelOverlay({
             />
             <button
               type="button"
-              onClick={() => {
-                if (!onRenameTrack) return;
-                const next = window.prompt("Rename track", t.name);
-                if (next && next.trim() && next !== t.name) onRenameTrack(t.id, next.trim());
-              }}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                if (onRemoveTrack && window.confirm(`Delete "${t.name}" and its clips?`)) {
-                  onRemoveTrack(t.id);
-                }
-              }}
+              onClick={() => onEditTrack?.(t.id)}
               className="whitespace-nowrap text-[12px] font-semibold leading-none"
-              title={t.name}
+              title={`Edit ${t.name}`}
             >
               {t.name}
             </button>
