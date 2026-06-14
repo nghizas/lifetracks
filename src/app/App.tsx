@@ -3,11 +3,13 @@ import { useStore, selectOrderedTracks } from "@/state";
 import { Timeline } from "@/timeline";
 import {
   BalanceMeter,
-  ConflictsSheet,
   EmptyState,
   SheetHost,
   StatusBar,
 } from "@/panels";
+
+// Thumb-first toolbar: 44px-tall buttons with real text labels (no glyph-only
+// chrome). Bigger, more obvious, optimised for tapping on a phone.
 
 export function App() {
   const ready = useStore((s) => s.ready);
@@ -18,7 +20,6 @@ export function App() {
   const undo = useStore((s) => s.undo);
   const redo = useStore((s) => s.redo);
 
-  const [conflictsOpen, setConflictsOpen] = useState(false);
   const [showBalance, setShowBalance] = useState(false);
 
   useEffect(() => {
@@ -54,11 +55,16 @@ export function App() {
   return (
     <>
       <div className="mx-auto flex h-full max-w-[430px] flex-col">
-        <header className="flex shrink-0 items-center justify-between border-b border-ink/5 px-4 pb-2 pt-[max(env(safe-area-inset-top),0.75rem)]">
-          <h1 className="text-base font-semibold tracking-tight">Lifetracks</h1>
-          <span className="rounded-full bg-ink/5 px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted">
-            1d
-          </span>
+        <header className="flex shrink-0 items-center justify-between border-b border-ink/5 px-4 pb-3 pt-[max(env(safe-area-inset-top),0.75rem)]">
+          <h1 className="text-lg font-semibold tracking-tight">Lifetracks</h1>
+          <button
+            type="button"
+            onClick={() => openSheet({ kind: "settings" })}
+            className="grid h-9 w-9 place-items-center rounded-full text-lg text-muted hover:bg-ink/5"
+            aria-label="Settings"
+          >
+            ⋯
+          </button>
         </header>
 
         {!ready ? (
@@ -69,18 +75,18 @@ export function App() {
           <EmptyState />
         ) : (
           <>
-            <div className="flex shrink-0 items-center gap-1.5 border-b border-ink/5 px-3 py-2">
+            <div className="flex shrink-0 items-center gap-2 border-b border-ink/5 px-3 py-2">
               <button
                 type="button"
                 onClick={() => openSheet({ kind: "new-track" })}
-                className="rounded-full bg-ink px-3 py-1.5 text-[11px] font-medium text-white"
+                className="h-11 rounded-full bg-ink px-4 text-[14px] font-semibold text-white"
               >
                 + Track
               </button>
               <button
                 type="button"
                 onClick={() => openSheet({ kind: "new-clip" })}
-                className="rounded-full border border-ink/15 px-3 py-1.5 text-[11px] font-medium"
+                className="h-11 rounded-full border border-ink/15 bg-white px-4 text-[14px] font-semibold"
               >
                 + Clip
               </button>
@@ -89,29 +95,21 @@ export function App() {
                 onClick={() => setShowBalance((b) => !b)}
                 aria-pressed={showBalance}
                 aria-label="Toggle balance meter"
-                className={`rounded-full border px-3 py-1.5 text-[11px] font-medium ${
+                className={`grid h-11 w-11 place-items-center rounded-full border text-[16px] ${
                   showBalance
                     ? "border-ink bg-ink text-white"
-                    : "border-ink/15 text-ink"
+                    : "border-ink/15 bg-white text-ink"
                 }`}
               >
                 ⚖
               </button>
-              <button
-                type="button"
-                onClick={() => openSheet({ kind: "settings" })}
-                aria-label="Settings"
-                className="rounded-full border border-ink/15 px-3 py-1.5 text-[11px] font-medium"
-              >
-                ⋯
-              </button>
-              <span className="ml-auto flex gap-1">
+              <span className="ml-auto flex gap-1.5">
                 <button
                   type="button"
                   disabled={!canUndo}
                   onClick={undo}
                   aria-label="Undo"
-                  className="rounded-full border border-ink/15 px-2.5 py-1.5 text-[11px] disabled:opacity-30"
+                  className="grid h-11 w-11 place-items-center rounded-full border border-ink/15 bg-white text-[18px] disabled:opacity-30"
                 >
                   ↶
                 </button>
@@ -120,14 +118,14 @@ export function App() {
                   disabled={!canRedo}
                   onClick={redo}
                   aria-label="Redo"
-                  className="rounded-full border border-ink/15 px-2.5 py-1.5 text-[11px] disabled:opacity-30"
+                  className="grid h-11 w-11 place-items-center rounded-full border border-ink/15 bg-white text-[18px] disabled:opacity-30"
                 >
                   ↷
                 </button>
               </span>
             </div>
 
-            <StatusBar onOpenConflicts={() => setConflictsOpen(true)} />
+            <StatusBar />
 
             {showBalance ? <BalanceMeter /> : null}
 
@@ -139,7 +137,6 @@ export function App() {
       </div>
 
       <SheetHost />
-      <ConflictsSheet open={conflictsOpen} onClose={() => setConflictsOpen(false)} />
     </>
   );
 }

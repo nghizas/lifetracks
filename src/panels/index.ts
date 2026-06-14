@@ -3,7 +3,6 @@ export { SheetHost } from "./SheetHost";
 export { NewTrackSheet } from "./NewTrackSheet";
 export { NewClipSheet } from "./NewClipSheet";
 export { EditClipSheet } from "./EditClipSheet";
-export { ConflictsSheet } from "./ConflictsSheet";
 export { StatusBar } from "./StatusBar";
 export { BalanceMeter } from "./BalanceMeter";
 export { EmptyState } from "./EmptyState";

@@ -79,17 +79,14 @@ test("user builds a 3-track roadmap by hand at 390px touch viewport", async ({
   expect(elapsed, `took ${elapsed.toFixed(1)}s`).toBeLessThan(180);
 });
 
-test("the sample-life door produces a non-empty roadmap with conflicts", async ({
-  page,
-}) => {
+test("the sample-life door produces a non-empty roadmap", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: /Load a sample life/i }).click();
 
-  // Sample life inserts 3 tracks
   await expect(page.locator("svg [data-clip-id]").first()).toBeVisible();
   const clipCount = await page.locator("svg [data-clip-id]").count();
   expect(clipCount).toBeGreaterThanOrEqual(10);
 
-  // The status bar shows at least one conflict (the realistic seed produces them)
-  await expect(page.getByRole("button", { name: /\d+ conflicts?/i })).toBeVisible();
+  // The Up Next strip should surface at least one imminent clip after loading sample.
+  await expect(page.getByText(/Up next/i)).toBeVisible();
 });

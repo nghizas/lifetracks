@@ -1,5 +1,7 @@
-// Slim strip showing the entire planning horizon. The current viewport
-// renders as a translucent rectangle. Tap or drag to jump the viewport.
+// Fat purple scrubber. The user-feedback pass made this much more prominent
+// (80px tall, violet background, big rounded viewport rectangle) because the
+// minimap doubles as both navigation and "I've zoomed in too far, where am I"
+// orientation. Tap or drag anywhere to jump the viewport center.
 
 import { useCallback, useMemo, useRef } from "react";
 import type { Clip } from "@/core";
@@ -27,28 +29,26 @@ export function Minimap({
   setView,
   width,
   viewportPxWidth,
-  height = 24,
+  height = 80,
 }: Props) {
   const totalDays = daysBetween(origin, horizonEnd);
   const today = todayStr();
   const todayDays = daysBetween(origin, today);
 
-  // Translate world coords (in current pxPerDay) into minimap pixels.
   const minimapPxPerDay = width / Math.max(1, totalDays);
 
   const viewportStartDays = view.scrollX / view.pxPerDay;
   const viewportEndDays = (view.scrollX + viewportPxWidth) / view.pxPerDay;
 
   const vpX = Math.max(0, viewportStartDays * minimapPxPerDay);
-  const vpW = Math.max(8, (viewportEndDays - viewportStartDays) * minimapPxPerDay);
+  const vpW = Math.max(28, (viewportEndDays - viewportStartDays) * minimapPxPerDay);
 
-  // Density: bucket clips into 60 buckets and render a faint mark per bucket.
-  const buckets = useMemo(() => {
-    const out: { x: number; color: string; weight: number }[] = [];
+  const density = useMemo(() => {
+    const out: { x: number; color: string }[] = [];
     for (const c of clips) {
       const startDays = daysBetween(origin, c.start);
       const x = startDays * minimapPxPerDay;
-      if (Number.isFinite(x)) out.push({ x, color: trackColorByClip(c), weight: 1 });
+      if (Number.isFinite(x)) out.push({ x, color: trackColorByClip(c) });
     }
     return out;
   }, [clips, origin, minimapPxPerDay, trackColorByClip]);
@@ -96,7 +96,21 @@ export function Minimap({
         dragging.current = false;
       }}
     >
-      <rect width={width} height={height} fill="#f4f4f5" />
+      {/* Lavender backplate */}
+      <rect width={width} height={height} fill="#f5f3ff" />
+      {/* Track density marks, big and proud */}
+      {density.map((b, i) => (
+        <line
+          key={i}
+          x1={b.x}
+          y1={10}
+          x2={b.x}
+          y2={height - 10}
+          stroke={b.color}
+          strokeWidth={2}
+          opacity={0.7}
+        />
+      ))}
       {/* Today line */}
       <line
         x1={todayDays * minimapPxPerDay}
@@ -104,35 +118,26 @@ export function Minimap({
         x2={todayDays * minimapPxPerDay}
         y2={height}
         stroke="#e11d48"
-        strokeWidth={1}
-        opacity={0.6}
+        strokeWidth={2}
+        opacity={0.85}
       />
-      {/* Density marks */}
-      {buckets.map((b, i) => (
-        <line
-          key={i}
-          x1={b.x}
-          y1={4}
-          x2={b.x}
-          y2={height - 4}
-          stroke={b.color}
-          strokeWidth={1}
-          opacity={0.5}
-        />
-      ))}
-      {/* Viewport */}
+      {/* Viewport rectangle — solid violet, big enough to grab */}
       <rect
         x={vpX}
-        y={1}
+        y={4}
         width={vpW}
-        height={height - 2}
-        fill="#0f1217"
-        opacity={0.1}
-        stroke="#0f1217"
-        strokeOpacity={0.4}
-        strokeWidth={1}
-        rx={3}
+        height={height - 8}
+        fill="#7c3aed"
+        fillOpacity={0.18}
+        stroke="#6d28d9"
+        strokeWidth={2}
+        rx={8}
       />
+      {/* Grip dots on the rectangle so it reads as "I'm draggable" */}
+      <g pointerEvents="none">
+        <circle cx={vpX + 8} cy={height / 2} r={2.5} fill="#6d28d9" />
+        <circle cx={vpX + vpW - 8} cy={height / 2} r={2.5} fill="#6d28d9" />
+      </g>
     </svg>
   );
 }

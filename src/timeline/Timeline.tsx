@@ -1,4 +1,5 @@
-// Top-level timeline view. Composes track headers + SVG canvas + ruler + minimap.
+// Top-level timeline view. Composes track headers + SVG canvas + ruler + a
+// bottom control row (Today + zoom −/+) + fat purple minimap.
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Clip } from "@/core";
@@ -15,7 +16,10 @@ import {
   TaskBar,
   type ClipBox,
 } from "./ClipShapes";
-import { screenXForDate } from "./coords";
+import {
+  clampPxPerDay,
+  screenXForDate,
+} from "./coords";
 import { LANE_HEIGHT, FLAG_LANE_HEIGHT, computeTrackLayouts } from "./layout";
 import { Minimap } from "./Minimap";
 import { Ruler } from "./Ruler";
@@ -23,10 +27,12 @@ import { TrackHeaders } from "./TrackHeaders";
 import { useTouchPanZoom } from "./useTouchPanZoom";
 
 const RULER_HEIGHT = 36;
-const MINIMAP_HEIGHT = 24;
+const MINIMAP_HEIGHT = 80;
+const CONTROLS_HEIGHT = 48;
 const HEADER_MIN = 80;
-const HEADER_MAX = 220;
-const DIVIDER_WIDTH = 4;
+const HEADER_MAX = 240;
+const DIVIDER_WIDTH = 6;
+const ZOOM_FACTOR = 1.6;
 
 export function Timeline() {
   const tracks = useStore(selectOrderedTracks);
@@ -68,6 +74,23 @@ export function Timeline() {
     return () => ro.disconnect();
   }, []);
 
+  // Jumps the viewport so today sits ~25% from the left.
+  const jumpToToday = () => {
+    const targetScroll = daysBetween(origin, today) * view.pxPerDay - canvasWidth * 0.25;
+    setView({ scrollX: targetScroll });
+  };
+
+  const zoomAtCenter = (factor: number) => {
+    const anchorScreenX = canvasWidth / 2;
+    const anchorWorld = anchorScreenX + view.scrollX;
+    const newPxPerDay = clampPxPerDay(view.pxPerDay * factor);
+    const scale = newPxPerDay / view.pxPerDay;
+    setView({
+      pxPerDay: newPxPerDay,
+      scrollX: anchorWorld * scale - anchorScreenX,
+    });
+  };
+
   const centeredRef = useRef(false);
   useEffect(() => {
     if (centeredRef.current || canvasWidth <= 0) return;
@@ -81,8 +104,6 @@ export function Timeline() {
     getCanvasLeft: () => canvasRef.current?.getBoundingClientRect().left ?? 0,
   });
 
-  // Month boundaries inside the visible viewport — used for vertical gridlines
-  // (calendar feel) regardless of ruler scale.
   const monthLines = useMemo(() => {
     const startDate = addDays(origin, Math.floor(view.scrollX / view.pxPerDay) - 31);
     const endDate = addDays(
@@ -181,7 +202,6 @@ export function Timeline() {
   const todayX = screenXForDate(origin, today, view.pxPerDay, view.scrollX);
   const svgHeight = Math.max(layout.totalHeight, canvasHeight);
 
-  // Drag-resize divider between track headers and canvas.
   function onDividerPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     e.preventDefault();
     const startX = e.clientX;
@@ -189,8 +209,7 @@ export function Timeline() {
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     function onMove(ev: PointerEvent) {
       const dx = ev.clientX - startX;
-      const next = Math.max(HEADER_MIN, Math.min(HEADER_MAX, startW + dx));
-      setView({ headerWidth: next });
+      setView({ headerWidth: Math.max(HEADER_MIN, Math.min(HEADER_MAX, startW + dx)) });
     }
     function onUp() {
       window.removeEventListener("pointermove", onMove);
@@ -201,6 +220,8 @@ export function Timeline() {
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onUp);
   }
+
+  const zoomLabel = labelForZoom(view.pxPerDay);
 
   return (
     <div className="flex h-full flex-col">
@@ -255,7 +276,6 @@ export function Timeline() {
               height={svgHeight}
               style={{ display: "block" }}
             >
-              {/* Calendar grid — month + year boundary lines, full canvas height */}
               {monthLines.map((m) => (
                 <line
                   key={`grid-${m.date}`}
@@ -263,12 +283,11 @@ export function Timeline() {
                   y1={0}
                   x2={m.x}
                   y2={svgHeight}
-                  stroke={m.isYearStart ? "#e5e7eb" : "#f3f4f6"}
-                  strokeWidth={1}
+                  stroke={m.isYearStart ? "#d1d5db" : "#f3f4f6"}
+                  strokeWidth={m.isYearStart ? 1 : 1}
                   pointerEvents="none"
                 />
               ))}
-              {/* Track separator lines */}
               {tracks.map((t) => {
                 const lay = layout.layouts.get(t.id);
                 if (!lay) return null;
@@ -283,7 +302,6 @@ export function Timeline() {
                   />
                 );
               })}
-              {/* Event disruption zones (behind clips) */}
               {eventZones.map((z) => (
                 <rect
                   key={`zone-${z.id}`}
@@ -296,7 +314,6 @@ export function Timeline() {
                   rx={4}
                 />
               ))}
-              {/* Clips */}
               {boxes.map(({ clip, box, color }) => {
                 const isSelected =
                   selection?.kind === "clip" && selection.id === clip.id;
@@ -306,52 +323,15 @@ export function Timeline() {
                 };
                 switch (clip.kind) {
                   case "task":
-                    return (
-                      <TaskBar
-                        key={clip.id}
-                        clip={clip}
-                        trackColor={color}
-                        box={box}
-                        selected={isSelected}
-                        onClick={onClick}
-                      />
-                    );
+                    return <TaskBar key={clip.id} clip={clip} trackColor={color} box={box} selected={isSelected} onClick={onClick} />;
                   case "stem":
-                    return (
-                      <StemBar
-                        key={clip.id}
-                        clip={clip}
-                        trackColor={color}
-                        box={box}
-                        selected={isSelected}
-                        onClick={onClick}
-                      />
-                    );
+                    return <StemBar key={clip.id} clip={clip} trackColor={color} box={box} selected={isSelected} onClick={onClick} />;
                   case "event":
-                    return (
-                      <EventDiamond
-                        key={clip.id}
-                        clip={clip}
-                        trackColor={color}
-                        box={box}
-                        selected={isSelected}
-                        onClick={onClick}
-                      />
-                    );
+                    return <EventDiamond key={clip.id} clip={clip} trackColor={color} box={box} selected={isSelected} onClick={onClick} />;
                   case "flag":
-                    return (
-                      <FlagMarker
-                        key={clip.id}
-                        clip={clip}
-                        trackColor={color}
-                        box={box}
-                        selected={isSelected}
-                        onClick={onClick}
-                      />
-                    );
+                    return <FlagMarker key={clip.id} clip={clip} trackColor={color} box={box} selected={isSelected} onClick={onClick} />;
                 }
               })}
-              {/* Playhead + "today" label */}
               {todayX >= -20 && todayX <= canvasWidth + 20 ? (
                 <g pointerEvents="none">
                   <line
@@ -360,25 +340,10 @@ export function Timeline() {
                     x2={todayX}
                     y2={svgHeight}
                     stroke="#e11d48"
-                    strokeWidth={1.5}
+                    strokeWidth={2}
                   />
-                  <rect
-                    x={todayX - 22}
-                    y={2}
-                    width={44}
-                    height={16}
-                    rx={8}
-                    fill="#e11d48"
-                  />
-                  <text
-                    x={todayX}
-                    y={10}
-                    dominantBaseline="central"
-                    textAnchor="middle"
-                    fontSize={10}
-                    fontWeight={600}
-                    fill="white"
-                  >
+                  <rect x={todayX - 24} y={2} width={48} height={18} rx={9} fill="#e11d48" />
+                  <text x={todayX} y={11} dominantBaseline="central" textAnchor="middle" fontSize={11} fontWeight={700} fill="white">
                     today
                   </text>
                 </g>
@@ -394,9 +359,9 @@ export function Timeline() {
       >
         <div
           style={{ width: view.headerWidth + DIVIDER_WIDTH }}
-          className="flex items-center justify-center text-[10px] text-muted"
+          className="flex items-center justify-center bg-white text-[11px] font-medium text-muted"
         >
-          {Math.round(view.pxPerDay * 30)}px/mo
+          {zoomLabel}
         </div>
         <Ruler
           origin={origin}
@@ -407,11 +372,41 @@ export function Timeline() {
         />
       </div>
 
+      {/* Bottom thumb-reach control row */}
       <div
-        className="flex shrink-0 border-t border-ink/5"
-        style={{ height: MINIMAP_HEIGHT }}
+        className="flex shrink-0 items-center justify-between gap-2 border-t border-ink/5 bg-white px-3"
+        style={{ height: CONTROLS_HEIGHT }}
       >
-        <div style={{ width: view.headerWidth + DIVIDER_WIDTH }} />
+        <button
+          type="button"
+          onClick={jumpToToday}
+          className="grid h-11 min-w-[5.5rem] place-items-center rounded-full bg-playhead px-4 text-[14px] font-semibold text-white"
+          aria-label="Jump to today"
+        >
+          ↻ Today
+        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => zoomAtCenter(1 / ZOOM_FACTOR)}
+            className="grid h-11 w-11 place-items-center rounded-full border border-ink/15 bg-white text-[20px] leading-none"
+            aria-label="Zoom out"
+          >
+            −
+          </button>
+          <button
+            type="button"
+            onClick={() => zoomAtCenter(ZOOM_FACTOR)}
+            className="grid h-11 w-11 place-items-center rounded-full border border-ink/15 bg-white text-[20px] leading-none"
+            aria-label="Zoom in"
+          >
+            +
+          </button>
+        </div>
+      </div>
+
+      {/* Fat purple minimap */}
+      <div className="flex shrink-0 border-t border-ink/5" style={{ height: MINIMAP_HEIGHT }}>
         <Minimap
           origin={origin}
           horizonEnd={horizonEnd}
@@ -422,13 +417,21 @@ export function Timeline() {
           }}
           view={view}
           setView={setView}
-          width={canvasWidth}
+          width={canvasWidth + view.headerWidth + DIVIDER_WIDTH}
           viewportPxWidth={canvasWidth}
           height={MINIMAP_HEIGHT}
         />
       </div>
     </div>
   );
+}
+
+function labelForZoom(p: number): string {
+  if (p < 0.6) return "decade";
+  if (p < 2) return "year";
+  if (p < 8) return "quarter";
+  if (p < 22) return "month";
+  return "week";
 }
 
 function EmptyTimelineHint() {
