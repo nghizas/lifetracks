@@ -1,7 +1,8 @@
 // Floating "track tag" overlays. The track header column is gone — instead
 // each track's name + mute/solo buttons live as a compact card pinned to the
-// top-left of that track's row inside the canvas itself. The canvas is now
-// full width.
+// top-left of that track's row inside the canvas itself. Cards are sized to
+// fit the full track name (no truncation) and use a semi-transparent backdrop
+// so clips beneath remain visible.
 
 import type { Track } from "@/core";
 import type { LayoutResult } from "./layout";
@@ -36,7 +37,7 @@ export function TrackLabelOverlay({
         return (
           <div
             key={t.id}
-            className="pointer-events-auto absolute flex max-w-[160px] items-center gap-1 rounded-lg border border-ink/10 bg-white/90 px-1.5 py-1 shadow-sm backdrop-blur-sm"
+            className="pointer-events-auto absolute flex items-center gap-1 rounded-lg border border-ink/10 bg-white/60 px-1.5 py-1 shadow-sm backdrop-blur-md"
             style={{ top: lay.yStart + 3, left: 6 }}
           >
             <span
@@ -57,7 +58,7 @@ export function TrackLabelOverlay({
                   onRemoveTrack(t.id);
                 }
               }}
-              className="min-w-0 truncate text-[12px] font-semibold leading-none"
+              className="whitespace-nowrap text-[12px] font-semibold leading-none"
               title={t.name}
             >
               {t.name}

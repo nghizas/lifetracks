@@ -25,7 +25,7 @@ import { Ruler } from "./Ruler";
 import { TrackLabelOverlay } from "./TrackLabelOverlay";
 import { useTouchPanZoom } from "./useTouchPanZoom";
 
-const RULER_HEIGHT = 48;
+const RULER_HEIGHT = 56;
 const CALENDAR_HEIGHT = 132;
 const CONTROLS_HEIGHT = 52;
 // Default canvas centering: today at 10% from left so the user looks primarily
@@ -275,6 +275,7 @@ export function Timeline() {
           origin={origin}
           scrollX={view.scrollX}
           pxPerDay={view.pxPerDay}
+          visibleDays={visibleDays}
           width={canvasWidth}
           height={RULER_HEIGHT}
         />
