@@ -1,6 +1,7 @@
-// Top-level timeline view. Tracks + canvas at top, inline ruler, thumb-reach
-// controls (Today + discrete zoom-level popover), and the bottom calendar strip
-// that shows clips as mini-bars per track ("notes" view, GarageBand-style).
+// Top-level timeline view. The track-header column was deleted — instead each
+// track gets a floating label overlay pinned to its row's top-left, and the
+// canvas spans full width. The prominent date header lives above the canvas
+// so "where am I in time" is the first thing the user reads.
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Clip } from "@/core";
@@ -21,21 +22,16 @@ import { CalendarStrip } from "./CalendarStrip";
 import { screenXForDate } from "./coords";
 import { LANE_HEIGHT, FLAG_LANE_HEIGHT, computeTrackLayouts } from "./layout";
 import { Ruler } from "./Ruler";
-import { TrackHeaders } from "./TrackHeaders";
+import { TrackLabelOverlay } from "./TrackLabelOverlay";
 import { useTouchPanZoom } from "./useTouchPanZoom";
 
-const RULER_HEIGHT = 30;
+const RULER_HEIGHT = 48;
 const CALENDAR_HEIGHT = 132;
 const CONTROLS_HEIGHT = 52;
-const HEADER_MIN = 80;
-const HEADER_MAX = 240;
-const DIVIDER_WIDTH = 6;
-// Default canvas centering: today at 10% from left (was 25%) so the user is
-// looking primarily into the future — past is one short scroll away.
+// Default canvas centering: today at 10% from left so the user looks primarily
+// into the future. Matches the strip anchoring today on the far left.
 const TODAY_LEFT_FRACTION = 0.1;
 
-// Discrete zoom levels exposed in the bottom popover. Anchoring today on
-// every level change matches the "today is home base" framing.
 interface ZoomLevel {
   label: string;
   pxPerDay: number;
@@ -51,7 +47,6 @@ const ZOOM_LEVELS: ZoomLevel[] = [
 ];
 
 function labelForPxPerDay(p: number): string {
-  // Pick the nearest level by log distance.
   let best: ZoomLevel = ZOOM_LEVELS[0]!;
   let bestDist = Math.abs(Math.log(p / best.pxPerDay));
   for (const lvl of ZOOM_LEVELS) {
@@ -83,9 +78,8 @@ export function Timeline() {
   const layout = useMemo(() => computeTrackLayouts(tracks, clips), [tracks, clips]);
 
   const canvasRef = useRef<HTMLDivElement>(null);
-  const [canvasWidth, setCanvasWidth] = useState(300);
+  const [canvasWidth, setCanvasWidth] = useState(390);
   const [canvasHeight, setCanvasHeight] = useState(400);
-  const [verticalScroll, setVerticalScroll] = useState(0);
   const [zoomMenuOpen, setZoomMenuOpen] = useState(false);
 
   useLayoutEffect(() => {
@@ -231,78 +225,33 @@ export function Timeline() {
 
   const todayX = screenXForDate(origin, today, view.pxPerDay, view.scrollX);
   const svgHeight = Math.max(layout.totalHeight, canvasHeight);
-  const stripWidth = canvasWidth + view.headerWidth + DIVIDER_WIDTH;
   const zoomLabel = labelForPxPerDay(view.pxPerDay);
-
-  function onDividerPointerDown(e: React.PointerEvent<HTMLDivElement>) {
-    e.preventDefault();
-    const startX = e.clientX;
-    const startW = view.headerWidth;
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    function onMove(ev: PointerEvent) {
-      const dx = ev.clientX - startX;
-      setView({ headerWidth: Math.max(HEADER_MIN, Math.min(HEADER_MAX, startW + dx)) });
-    }
-    function onUp() {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
-    }
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onUp);
-  }
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex flex-1 overflow-hidden">
-        <div
-          className="overflow-hidden border-r border-ink/5"
-          style={{ width: view.headerWidth }}
-        >
-          <div
-            className="relative"
-            style={{
-              transform: `translateY(${-verticalScroll}px)`,
-              willChange: "transform",
-            }}
-          >
-            <TrackHeaders
-              tracks={tracks}
-              layout={layout}
-              width={view.headerWidth}
-              onRemoveTrack={(id) => {
-                if (window.confirm("Delete this track and its clips?")) removeTrack(id);
-              }}
-              onRenameTrack={renameTrack}
-              onAddClipToTrack={(id) =>
-                openSheet({ kind: "new-clip", defaults: { trackId: id } })
-              }
-              onToggleMute={toggleMute}
-              onToggleSolo={toggleSolo}
-            />
-          </div>
-        </div>
+      {/* Prominent date header — answers "where am I" */}
+      <div
+        className="shrink-0 border-b border-ink/5"
+        style={{ height: RULER_HEIGHT }}
+      >
+        <Ruler
+          origin={origin}
+          scrollX={view.scrollX}
+          pxPerDay={view.pxPerDay}
+          width={canvasWidth}
+          height={RULER_HEIGHT}
+        />
+      </div>
 
-        <div
-          onPointerDown={onDividerPointerDown}
-          aria-label="Resize track header column"
-          role="separator"
-          className="shrink-0 cursor-col-resize touch-none"
-          style={{ width: DIVIDER_WIDTH, background: "transparent" }}
-          title="Drag to resize"
-        >
-          <div className="mx-auto h-full w-px bg-ink/10" />
-        </div>
-
-        <div
-          ref={canvasRef}
-          className="relative flex-1 touch-none overflow-y-auto overscroll-contain"
-          onScroll={(e) => setVerticalScroll((e.target as HTMLDivElement).scrollTop)}
-        >
-          {tracks.length === 0 ? (
-            <EmptyTimelineHint />
-          ) : (
+      {/* Full-width canvas with floating track-label overlays */}
+      <div
+        ref={canvasRef}
+        className="relative flex-1 touch-none overflow-y-auto overscroll-contain"
+      >
+        {tracks.length === 0 ? (
+          <EmptyTimelineHint />
+        ) : (
+          <>
             <svg
               width={canvasWidth}
               height={svgHeight}
@@ -384,31 +333,28 @@ export function Timeline() {
                     stroke="#e11d48"
                     strokeWidth={2}
                   />
-                  <rect x={todayX - 24} y={2} width={48} height={18} rx={9} fill="#e11d48" />
-                  <text x={todayX} y={11} dominantBaseline="central" textAnchor="middle" fontSize={11} fontWeight={700} fill="white">
-                    today
-                  </text>
                 </g>
               ) : null}
             </svg>
-          )}
-        </div>
+
+            <TrackLabelOverlay
+              tracks={tracks}
+              layout={layout}
+              onRemoveTrack={(id) => {
+                if (window.confirm("Delete this track and its clips?")) removeTrack(id);
+              }}
+              onRenameTrack={renameTrack}
+              onAddClipToTrack={(id) =>
+                openSheet({ kind: "new-clip", defaults: { trackId: id } })
+              }
+              onToggleMute={toggleMute}
+              onToggleSolo={toggleSolo}
+            />
+          </>
+        )}
       </div>
 
-      <div
-        className="flex shrink-0 border-t border-ink/5"
-        style={{ height: RULER_HEIGHT }}
-      >
-        <div style={{ width: view.headerWidth + DIVIDER_WIDTH }} className="bg-white" />
-        <Ruler
-          origin={origin}
-          scrollX={view.scrollX}
-          pxPerDay={view.pxPerDay}
-          width={canvasWidth}
-          height={RULER_HEIGHT}
-        />
-      </div>
-
+      {/* Thumb-reach controls */}
       <div
         className="relative flex shrink-0 items-center justify-between gap-2 border-t border-ink/5 bg-white px-3"
         style={{ height: CONTROLS_HEIGHT }}
@@ -464,7 +410,7 @@ export function Timeline() {
           canvasWidth={canvasWidth}
           tracks={tracks}
           clips={clips}
-          width={stripWidth}
+          width={canvasWidth}
           height={CALENDAR_HEIGHT}
         />
       </div>

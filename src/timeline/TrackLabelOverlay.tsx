@@ -1,6 +1,7 @@
-// Left-column track headers — GarageBand-style mixer with mute / solo buttons,
-// color swatch, single-line truncated name. Long-press the name to delete.
-// Tap the name to rename (prompt for now; an EditTrackSheet replaces it later).
+// Floating "track tag" overlays. The track header column is gone — instead
+// each track's name + mute/solo buttons live as a compact card pinned to the
+// top-left of that track's row inside the canvas itself. The canvas is now
+// full width.
 
 import type { Track } from "@/core";
 import type { LayoutResult } from "./layout";
@@ -8,7 +9,6 @@ import type { LayoutResult } from "./layout";
 interface Props {
   tracks: readonly Track[];
   layout: LayoutResult;
-  width: number;
   onRemoveTrack?: (id: string) => void;
   onRenameTrack?: (id: string, name: string) => void;
   onAddClipToTrack?: (id: string) => void;
@@ -16,37 +16,31 @@ interface Props {
   onToggleSolo?: (id: string) => void;
 }
 
-export function TrackHeaders({
+export function TrackLabelOverlay({
   tracks,
   layout,
-  width,
   onRemoveTrack,
   onRenameTrack,
   onAddClipToTrack,
   onToggleMute,
   onToggleSolo,
 }: Props) {
-  const anySoloed = tracks.some((t) => t.soloed);
-
   return (
     <div
-      className="relative shrink-0 bg-white"
-      style={{ width, height: layout.totalHeight }}
+      className="pointer-events-none absolute inset-x-0 top-0"
+      style={{ height: layout.totalHeight }}
     >
       {tracks.map((t) => {
         const lay = layout.layouts.get(t.id);
         if (!lay) return null;
-        const dimmed = anySoloed ? !t.soloed : t.muted;
         return (
           <div
             key={t.id}
-            className={`absolute left-0 right-0 flex items-center gap-1.5 border-b border-ink/5 px-2 transition-opacity ${
-              dimmed ? "opacity-40" : "opacity-100"
-            }`}
-            style={{ top: lay.yStart, height: lay.height }}
+            className="pointer-events-auto absolute flex max-w-[160px] items-center gap-1 rounded-lg border border-ink/10 bg-white/90 px-1.5 py-1 shadow-sm backdrop-blur-sm"
+            style={{ top: lay.yStart + 3, left: 6 }}
           >
             <span
-              className="h-2.5 w-2.5 shrink-0 rounded-full"
+              className="h-2 w-2 shrink-0 rounded-full"
               style={{ background: t.color }}
               aria-hidden
             />
@@ -63,7 +57,7 @@ export function TrackHeaders({
                   onRemoveTrack(t.id);
                 }
               }}
-              className="min-w-0 flex-1 truncate text-left text-[13px] font-medium leading-tight"
+              className="min-w-0 truncate text-[12px] font-semibold leading-none"
               title={t.name}
             >
               {t.name}
@@ -77,8 +71,10 @@ export function TrackHeaders({
                 }}
                 aria-pressed={t.muted}
                 aria-label={`${t.muted ? "Unmute" : "Mute"} ${t.name}`}
-                className={`grid h-6 w-6 shrink-0 place-items-center rounded text-[10px] font-bold ${
-                  t.muted ? "bg-ink text-white" : "border border-ink/15 text-muted hover:bg-ink/5"
+                className={`grid h-5 w-5 shrink-0 place-items-center rounded text-[9px] font-bold ${
+                  t.muted
+                    ? "bg-ink text-white"
+                    : "border border-ink/15 text-muted"
                 }`}
               >
                 M
@@ -93,8 +89,10 @@ export function TrackHeaders({
                 }}
                 aria-pressed={t.soloed}
                 aria-label={`${t.soloed ? "Unsolo" : "Solo"} ${t.name}`}
-                className={`grid h-6 w-6 shrink-0 place-items-center rounded text-[10px] font-bold ${
-                  t.soloed ? "bg-amber-400 text-ink" : "border border-ink/15 text-muted hover:bg-ink/5"
+                className={`grid h-5 w-5 shrink-0 place-items-center rounded text-[9px] font-bold ${
+                  t.soloed
+                    ? "bg-amber-400 text-ink"
+                    : "border border-ink/15 text-muted"
                 }`}
               >
                 S
@@ -104,7 +102,7 @@ export function TrackHeaders({
               <button
                 type="button"
                 onClick={() => onAddClipToTrack(t.id)}
-                className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-base leading-none text-muted hover:bg-ink/5"
+                className="grid h-5 w-5 shrink-0 place-items-center rounded text-[14px] leading-none text-muted"
                 aria-label={`Add clip to ${t.name}`}
               >
                 +

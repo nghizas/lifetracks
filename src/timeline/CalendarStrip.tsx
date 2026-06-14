@@ -114,17 +114,27 @@ export function CalendarStrip({
   const tracksTop = ROW_GUTTER + ROW_YEAR + ROW_MONTH;
   const tracksBottom = height - ROW_TODAY_LABEL;
   const tracksHeight = Math.max(8, tracksBottom - tracksTop);
+  // Respect mute / solo: solo'd tracks are the only visible ones; otherwise
+  // muted tracks are hidden entirely from the strip. Heights divide up the
+  // remaining space evenly so a single visible track fills the strip.
   const orderedTracks = useMemo(
     () => tracks.slice().sort((a, b) => a.order - b.order),
     [tracks],
   );
-  const rowHeight = orderedTracks.length > 0 ? tracksHeight / orderedTracks.length : 0;
+  const anySoloed = orderedTracks.some((t) => t.soloed);
+  const visibleTracks = useMemo(
+    () =>
+      anySoloed
+        ? orderedTracks.filter((t) => t.soloed)
+        : orderedTracks.filter((t) => !t.muted),
+    [orderedTracks, anySoloed],
+  );
+  const rowHeight = visibleTracks.length > 0 ? tracksHeight / visibleTracks.length : 0;
   const trackIndex = useMemo(() => {
     const m = new Map<string, number>();
-    orderedTracks.forEach((t, i) => m.set(t.id, i));
+    visibleTracks.forEach((t, i) => m.set(t.id, i));
     return m;
-  }, [orderedTracks]);
-  const anySoloed = orderedTracks.some((t) => t.soloed);
+  }, [visibleTracks]);
 
   // Pre-render every clip as a mini-bar / marker on its track row.
   const clipShapes = useMemo(() => {
@@ -141,8 +151,8 @@ export function CalendarStrip({
     for (const c of clips) {
       const ti = trackIndex.get(c.trackId);
       if (ti === undefined) continue;
-      const track = orderedTracks[ti]!;
-      const dim = anySoloed ? !track.soloed : track.muted;
+      const track = visibleTracks[ti]!;
+      const dim = false; // visibleTracks already filters out hidden tracks
       const yTop = tracksTop + ti * rowHeight + 2;
       const yH = Math.max(3, rowHeight - 4);
       const xStart = sxForDate(c.start);
@@ -205,15 +215,7 @@ export function CalendarStrip({
       }
     }
     return out;
-  }, [
-    clips,
-    orderedTracks,
-    trackIndex,
-    sxForDate,
-    rowHeight,
-    tracksTop,
-    anySoloed,
-  ]);
+  }, [clips, visibleTracks, trackIndex, sxForDate, rowHeight, tracksTop]);
 
   const todayX = sxForDate(today);
 
@@ -337,7 +339,7 @@ export function CalendarStrip({
         ))}
 
       {/* Track separator lines */}
-      {orderedTracks.map((_, i) => {
+      {visibleTracks.map((_, i) => {
         if (i === 0) return null;
         const y = tracksTop + i * rowHeight;
         return (
