@@ -1,11 +1,10 @@
-// Floating "track tag" overlays. The track header column is gone — instead
-// each track's name + mute/solo buttons live as a compact card pinned to the
-// top-left of that track's row inside the canvas itself. Cards are sized to
-// fit the full track name (no truncation) and use a semi-transparent backdrop
-// so clips beneath remain visible.
+// Track tag overlay. The label sits in the dedicated label row at the top of
+// each track (reserved by `computeTrackLayouts`), so clips never visually
+// overlap the label. Opaque background — no transparency or blur needed any
+// more. The `+` add-clip button is a colored disc filled with the track color.
 
 import type { Track } from "@/core";
-import type { LayoutResult } from "./layout";
+import { type LayoutResult, LABEL_ROW_HEIGHT } from "./layout";
 
 interface Props {
   tracks: readonly Track[];
@@ -37,8 +36,12 @@ export function TrackLabelOverlay({
         return (
           <div
             key={t.id}
-            className="pointer-events-auto absolute flex items-center gap-1 rounded-lg border border-ink/10 bg-white/60 px-1.5 py-1 shadow-sm backdrop-blur-md"
-            style={{ top: lay.yStart + 3, left: 6 }}
+            className="pointer-events-auto absolute flex items-center gap-1.5 rounded-lg border border-ink/10 bg-white px-2 shadow-sm"
+            style={{
+              top: lay.yStart + (LABEL_ROW_HEIGHT - 22) / 2,
+              left: 6,
+              height: 22,
+            }}
           >
             <span
               className="h-2 w-2 shrink-0 rounded-full"
@@ -103,7 +106,8 @@ export function TrackLabelOverlay({
               <button
                 type="button"
                 onClick={() => onAddClipToTrack(t.id)}
-                className="grid h-5 w-5 shrink-0 place-items-center rounded text-[14px] leading-none text-muted"
+                className="grid h-5 w-5 shrink-0 place-items-center rounded-full text-[13px] font-bold leading-none text-white shadow-sm"
+                style={{ background: t.color }}
                 aria-label={`Add clip to ${t.name}`}
               >
                 +

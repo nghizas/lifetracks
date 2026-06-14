@@ -1,7 +1,12 @@
-// Per-track Y layout. Within a track:
-//   1. (optional) thin flag row on top
-//   2. stack of task/event sub-lanes (greedy interval packing)
-//   3. stack of stem sub-lanes (greedy interval packing)
+// Per-track Y layout. Each track reserves a small "label row" at the top for
+// the floating tag (track name + M/S/+ buttons) so clips never visually
+// overlap the label.
+//
+// Within a track:
+//   1. label row (always)
+//   2. (optional) thin flag row
+//   3. stack of task/event sub-lanes (greedy interval packing)
+//   4. stack of stem sub-lanes (greedy interval packing)
 // Heights grow to fit so no two clips ever visually overlap.
 // Pure — no React. Driven by core's `packIntoLanes`.
 
@@ -9,8 +14,9 @@ import { type Clip, type Track, packIntoLanes } from "@/core";
 
 export const LANE_HEIGHT = 28;
 export const FLAG_LANE_HEIGHT = 14;
-export const COLLAPSED_TRACK_HEIGHT = 28;
-export const MIN_TRACK_HEIGHT = LANE_HEIGHT;
+export const LABEL_ROW_HEIGHT = 26;
+export const COLLAPSED_TRACK_HEIGHT = LABEL_ROW_HEIGHT;
+export const MIN_TRACK_HEIGHT = LABEL_ROW_HEIGHT + LANE_HEIGHT;
 
 export interface TrackLayout {
   yStart: number;
@@ -49,10 +55,10 @@ export function computeTrackLayouts(
         height: COLLAPSED_TRACK_HEIGHT,
         collapsed: true,
         flagLaneY: null,
-        taskLaneStartY: y,
+        taskLaneStartY: y + LABEL_ROW_HEIGHT,
         taskLaneCount: 0,
         taskAssignments: new Map(),
-        stemLaneStartY: y,
+        stemLaneStartY: y + LABEL_ROW_HEIGHT,
         stemLaneCount: 0,
         stemAssignments: new Map(),
       });
@@ -60,7 +66,8 @@ export function computeTrackLayouts(
       continue;
     }
 
-    let inner = 0;
+    // Reserve the label row at the top of every track.
+    let inner = LABEL_ROW_HEIGHT;
     let flagLaneY: number | null = null;
     if (flags.length > 0) {
       flagLaneY = y + inner;
