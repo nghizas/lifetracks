@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { ClipKind, ClipStatus } from "@/core";
+import type { ClipKind, ClipStatus, RecurrenceFreq } from "@/core";
 import { addMonths } from "@/core";
 import { selectOrderedTracks, useStore } from "@/state";
 import { Field, Sheet, inputClass } from "./Sheet";
@@ -12,6 +12,13 @@ const KIND_LABEL: Record<ClipKind, string> = {
 };
 
 const STATUSES: ClipStatus[] = ["planned", "active", "done", "skipped"];
+
+const CADENCES: { value: RecurrenceFreq; label: string }[] = [
+  { value: "daily", label: "Daily" },
+  { value: "weekly", label: "Weekly" },
+  { value: "biweekly", label: "Every 2 weeks" },
+  { value: "monthly", label: "Monthly" },
+];
 
 export function EditClipSheet() {
   const sheet = useStore((s) => s.sheet);
@@ -29,9 +36,10 @@ export function EditClipSheet() {
   const [start, setStart] = useState("");
   const [end, setEnd] = useState<string | null>(null);
   const [trackId, setTrackId] = useState("");
-  const [effort, setEffort] = useState(3);
   const [status, setStatus] = useState<ClipStatus>("planned");
   const [startTime, setStartTime] = useState<string>("");
+  const [cadence, setCadence] = useState<RecurrenceFreq>("weekly");
+  const [until, setUntil] = useState<string>("");
 
   useEffect(() => {
     if (!open || !clip) return;
@@ -39,9 +47,10 @@ export function EditClipSheet() {
     setStart(clip.start);
     setEnd(clip.end);
     setTrackId(clip.trackId);
-    setEffort(clip.effort);
     setStatus(clip.status);
     setStartTime(clip.startTime ?? "");
+    setCadence(clip.recurrence?.freq ?? "weekly");
+    setUntil(clip.recurrence?.until ?? addMonths(clip.start, 6));
   }, [open, clip]);
 
   if (!open || !clip) {
@@ -57,9 +66,12 @@ export function EditClipSheet() {
       start,
       end: clip.kind === "task" ? end ?? start : clip.end,
       trackId,
-      effort,
       status,
       startTime: clip.kind === "event" ? (startTime || null) : clip.startTime,
+      recurrence:
+        clip.kind === "stem"
+          ? { freq: cadence, until, interval: clip.recurrence?.interval ?? 1 }
+          : clip.recurrence,
     });
     closeSheet();
   }
@@ -137,6 +149,33 @@ export function EditClipSheet() {
         </Field>
       ) : null}
 
+      {clip.kind === "stem" ? (
+        <>
+          <Field label="Cadence">
+            <select
+              value={cadence}
+              onChange={(e) => setCadence(e.target.value as RecurrenceFreq)}
+              className={inputClass}
+            >
+              {CADENCES.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Until">
+            <input
+              type="date"
+              value={until}
+              onChange={(e) => setUntil(e.target.value)}
+              min={start}
+              className={inputClass}
+            />
+          </Field>
+        </>
+      ) : null}
+
       {clip.kind === "event" ? (
         <Field label="Time (optional)">
           <input
@@ -150,22 +189,6 @@ export function EditClipSheet() {
           </div>
         </Field>
       ) : null}
-
-      <Field label={`Effort · ${effort}`}>
-        <input
-          type="range"
-          min={1}
-          max={5}
-          step={1}
-          value={effort}
-          onChange={(e) => setEffort(Number(e.target.value))}
-          className="w-full"
-        />
-        <div className="mt-1 flex justify-between text-[10px] text-muted">
-          <span>1 light</span>
-          <span>5 heavy</span>
-        </div>
-      </Field>
 
       <Field label="Status">
         <div className="flex gap-1.5">

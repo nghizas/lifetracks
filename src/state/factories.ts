@@ -52,6 +52,8 @@ export interface MakeClipInput {
   start: string;
   end?: string | null;
   effort?: number;
+  /** Optional recurrence override (only used for stems). */
+  recurrence?: { freq: "daily" | "weekly" | "biweekly" | "monthly"; until: string; interval?: number };
 }
 
 export function makeClip(input: MakeClipInput, now: string): Clip {
@@ -67,11 +69,17 @@ export function makeClip(input: MakeClipInput, now: string): Clip {
   if (input.kind === "task") {
     base.end = input.end ?? addMonths(input.start, 3);
   } else if (input.kind === "stem") {
-    base.recurrence = {
-      freq: "weekly",
-      until: addMonths(input.start, 6),
-      interval: 1,
-    };
+    base.recurrence = input.recurrence
+      ? {
+          freq: input.recurrence.freq,
+          until: input.recurrence.until,
+          interval: input.recurrence.interval ?? 1,
+        }
+      : {
+          freq: "weekly",
+          until: addMonths(input.start, 6),
+          interval: 1,
+        };
   } else if (input.kind === "event") {
     base.disruption = {
       monthsBefore: 0,

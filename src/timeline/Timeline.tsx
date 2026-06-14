@@ -34,23 +34,27 @@ const TODAY_LEFT_FRACTION = 0.1;
 
 interface ZoomLevel {
   label: string;
-  pxPerDay: number;
+  /** Number of days the level fills the canvas viewport with. */
+  days: number;
 }
 
+// "Click WEEK and the canvas shows exactly 1 week, not multiple weeks."
+// pxPerDay is derived from canvas width at activation time so the picked
+// span fills the viewport precisely.
 const ZOOM_LEVELS: ZoomLevel[] = [
-  { label: "WEEK", pxPerDay: 28 },
-  { label: "MONTH", pxPerDay: 10 },
-  { label: "QUARTER", pxPerDay: 2.5 },
-  { label: "YEAR", pxPerDay: 0.8 },
-  { label: "3YR", pxPerDay: 0.27 },
-  { label: "5YR", pxPerDay: 0.16 },
+  { label: "WEEK", days: 7 },
+  { label: "MONTH", days: 30 },
+  { label: "QUARTER", days: 91 },
+  { label: "YEAR", days: 365 },
+  { label: "3YR", days: 1095 },
+  { label: "5YR", days: 1825 },
 ];
 
-function labelForPxPerDay(p: number): string {
+function labelForViewport(visibleDays: number): string {
   let best: ZoomLevel = ZOOM_LEVELS[0]!;
-  let bestDist = Math.abs(Math.log(p / best.pxPerDay));
+  let bestDist = Math.abs(Math.log(visibleDays / best.days));
   for (const lvl of ZOOM_LEVELS) {
-    const d = Math.abs(Math.log(p / lvl.pxPerDay));
+    const d = Math.abs(Math.log(visibleDays / lvl.days));
     if (d < bestDist) {
       bestDist = d;
       best = lvl;
@@ -120,7 +124,8 @@ export function Timeline() {
     setView({ scrollX: targetScroll });
   };
 
-  const setZoomLevel = (pxPerDay: number) => {
+  const setZoomToDays = (days: number) => {
+    const pxPerDay = canvasWidth / days;
     const targetScroll = daysBetween(origin, today) * pxPerDay - canvasWidth * TODAY_LEFT_FRACTION;
     setView({ pxPerDay, scrollX: targetScroll });
     setZoomMenuOpen(false);
@@ -256,7 +261,8 @@ export function Timeline() {
 
   const todayX = screenXForDate(origin, today, view.pxPerDay, view.scrollX);
   const svgHeight = Math.max(layout.totalHeight, canvasHeight);
-  const zoomLabel = labelForPxPerDay(view.pxPerDay);
+  const visibleDays = canvasWidth / view.pxPerDay;
+  const zoomLabel = labelForViewport(visibleDays);
 
   return (
     <div className="flex h-full flex-col">
@@ -414,12 +420,12 @@ export function Timeline() {
               className="absolute bottom-full right-0 mb-2 w-32 overflow-hidden rounded-xl border border-ink/10 bg-white shadow-xl"
             >
               {ZOOM_LEVELS.map((lvl) => {
-                const active = labelForPxPerDay(view.pxPerDay) === lvl.label;
+                const active = zoomLabel === lvl.label;
                 return (
                   <button
                     key={lvl.label}
                     type="button"
-                    onClick={() => setZoomLevel(lvl.pxPerDay)}
+                    onClick={() => setZoomToDays(lvl.days)}
                     className={`block w-full px-4 py-2.5 text-left text-[13px] font-semibold ${
                       active ? "bg-ink text-white" : "text-ink hover:bg-ink/5"
                     }`}

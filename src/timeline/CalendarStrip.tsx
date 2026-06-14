@@ -52,11 +52,12 @@ export function CalendarStrip({
   const today = todayStr();
   const todayDayIdx = daysBetween(origin, today);
 
-  // Show future-forward context. We pick the strip range so it covers from
-  // ~1 week before today out to today + (a number of days proportional to the
-  // canvas range × 4, clamped 90 days .. 5 years).
+  // Show future-forward context proportional to the canvas. Strip range is
+  // 4× the canvas range, clamped 14 days .. 10 years. So WEEK zoom on the
+  // canvas (7 days) gives a 28-day strip; MONTH (30) gives ~4 months; YEAR
+  // (365) gives ~4 years — the strip is always one "level up" of context.
   const canvasViewportDays = canvasWidth / view.pxPerDay;
-  const desiredStripDays = Math.max(90, Math.min(1825, canvasViewportDays * 4));
+  const desiredStripDays = Math.max(14, Math.min(3650, canvasViewportDays * 4));
   const stripStartDays = todayDayIdx - PAST_BUFFER_DAYS;
   const stripEndDays = stripStartDays + desiredStripDays;
   const stripPxPerDay = width / desiredStripDays;

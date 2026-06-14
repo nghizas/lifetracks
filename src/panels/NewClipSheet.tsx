@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { type ClipKind, addMonths, todayStr } from "@/core";
+import { type ClipKind, type RecurrenceFreq, addMonths, todayStr } from "@/core";
 import { selectOrderedTracks, useStore } from "@/state";
 import { Field, Sheet, inputClass } from "./Sheet";
 
@@ -8,6 +8,13 @@ const KINDS: { value: ClipKind; label: string; hint: string }[] = [
   { value: "event", label: "Event", hint: "a fixed date" },
   { value: "stem", label: "Stem", hint: "a recurring habit" },
   { value: "flag", label: "Flag", hint: "a milestone" },
+];
+
+const CADENCES: { value: RecurrenceFreq; label: string }[] = [
+  { value: "daily", label: "Daily" },
+  { value: "weekly", label: "Weekly" },
+  { value: "biweekly", label: "Every 2 weeks" },
+  { value: "monthly", label: "Monthly" },
 ];
 
 export function NewClipSheet() {
@@ -25,6 +32,8 @@ export function NewClipSheet() {
   const [end, setEnd] = useState(addMonths(todayStr(), 2));
   const [trackId, setTrackId] = useState<string>("");
   const [startTime, setStartTime] = useState<string>("");
+  const [cadence, setCadence] = useState<RecurrenceFreq>("weekly");
+  const [until, setUntil] = useState<string>(addMonths(todayStr(), 6));
 
   useEffect(() => {
     if (!open) return;
@@ -36,7 +45,17 @@ export function NewClipSheet() {
     setEnd(addMonths(initialStart, 2));
     setTrackId(defaults?.trackId ?? fallbackTrack);
     setStartTime("");
+    setCadence("weekly");
+    setUntil(addMonths(initialStart, 6));
   }, [open, defaults, tracks]);
+
+  // Re-default until-date when start moves, but only if user hasn't tweaked.
+  useEffect(() => {
+    if (kind === "stem") {
+      setUntil(addMonths(start, 6));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [start]);
 
   function submit() {
     const t = title.trim();
@@ -47,6 +66,8 @@ export function NewClipSheet() {
       title: t,
       start,
       end: kind === "task" ? end : null,
+      recurrence:
+        kind === "stem" ? { freq: cadence, until, interval: 1 } : undefined,
     });
     if (kind === "event" && startTime) {
       patchClip(created.id, { startTime });
@@ -152,6 +173,33 @@ export function NewClipSheet() {
             className={inputClass}
           />
         </Field>
+      ) : null}
+
+      {kind === "stem" ? (
+        <>
+          <Field label="Cadence">
+            <select
+              value={cadence}
+              onChange={(e) => setCadence(e.target.value as RecurrenceFreq)}
+              className={inputClass}
+            >
+              {CADENCES.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Until">
+            <input
+              type="date"
+              value={until}
+              onChange={(e) => setUntil(e.target.value)}
+              min={start}
+              className={inputClass}
+            />
+          </Field>
+        </>
       ) : null}
 
       {kind === "event" ? (
