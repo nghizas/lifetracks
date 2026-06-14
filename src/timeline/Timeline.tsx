@@ -20,15 +20,15 @@ import {
   clampPxPerDay,
   screenXForDate,
 } from "./coords";
+import { CalendarStrip } from "./CalendarStrip";
 import { LANE_HEIGHT, FLAG_LANE_HEIGHT, computeTrackLayouts } from "./layout";
-import { Minimap } from "./Minimap";
 import { Ruler } from "./Ruler";
 import { TrackHeaders } from "./TrackHeaders";
 import { useTouchPanZoom } from "./useTouchPanZoom";
 
-const RULER_HEIGHT = 36;
-const MINIMAP_HEIGHT = 80;
-const CONTROLS_HEIGHT = 48;
+const RULER_HEIGHT = 30;
+const CALENDAR_HEIGHT = 132;
+const CONTROLS_HEIGHT = 52;
 const HEADER_MIN = 80;
 const HEADER_MAX = 240;
 const DIVIDER_WIDTH = 6;
@@ -201,6 +201,9 @@ export function Timeline() {
 
   const todayX = screenXForDate(origin, today, view.pxPerDay, view.scrollX);
   const svgHeight = Math.max(layout.totalHeight, canvasHeight);
+  // Width of the full app shell that the calendar strip should span (canvas + header column + divider).
+  const stripWidth = canvasWidth + view.headerWidth + DIVIDER_WIDTH;
+  void horizonEnd;
 
   function onDividerPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     e.preventDefault();
@@ -353,16 +356,12 @@ export function Timeline() {
         </div>
       </div>
 
+      {/* Inline canvas ruler — gives the clips above an immediate date label */}
       <div
         className="flex shrink-0 border-t border-ink/5"
         style={{ height: RULER_HEIGHT }}
       >
-        <div
-          style={{ width: view.headerWidth + DIVIDER_WIDTH }}
-          className="flex items-center justify-center bg-white text-[11px] font-medium text-muted"
-        >
-          {zoomLabel}
-        </div>
+        <div style={{ width: view.headerWidth + DIVIDER_WIDTH }} className="bg-white" />
         <Ruler
           origin={origin}
           scrollX={view.scrollX}
@@ -372,7 +371,7 @@ export function Timeline() {
         />
       </div>
 
-      {/* Bottom thumb-reach control row */}
+      {/* Thumb-reach controls: Today + zoom label + zoom buttons */}
       <div
         className="flex shrink-0 items-center justify-between gap-2 border-t border-ink/5 bg-white px-3"
         style={{ height: CONTROLS_HEIGHT }}
@@ -385,6 +384,9 @@ export function Timeline() {
         >
           ↻ Today
         </button>
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+          {zoomLabel}
+        </div>
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -405,21 +407,21 @@ export function Timeline() {
         </div>
       </div>
 
-      {/* Fat purple minimap */}
-      <div className="flex shrink-0 border-t border-ink/5" style={{ height: MINIMAP_HEIGHT }}>
-        <Minimap
+      {/* The differentiator: an accordion calendar at the bottom that *is* the
+          primary navigation surface, GarageBand-style. */}
+      <div className="flex shrink-0 border-t border-ink/5" style={{ height: CALENDAR_HEIGHT }}>
+        <CalendarStrip
           origin={origin}
-          horizonEnd={horizonEnd}
+          view={view}
+          setView={setView}
+          canvasWidth={canvasWidth}
           clips={clips}
           trackColorByClip={(c) => {
             const t = tracks.find((tr) => tr.id === c.trackId);
             return t?.color ?? "#5b8def";
           }}
-          view={view}
-          setView={setView}
-          width={canvasWidth + view.headerWidth + DIVIDER_WIDTH}
-          viewportPxWidth={canvasWidth}
-          height={MINIMAP_HEIGHT}
+          width={stripWidth}
+          height={CALENDAR_HEIGHT}
         />
       </div>
     </div>
