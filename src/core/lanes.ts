@@ -14,7 +14,7 @@ export interface VisualInterval {
 }
 
 export function getVisualInterval(c: Clip): VisualInterval {
-  if (c.kind === "task") {
+  if (c.kind === "span") {
     return { start: c.start, end: c.end ?? c.start };
   }
   if (c.kind === "stem") {

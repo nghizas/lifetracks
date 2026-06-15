@@ -7,7 +7,7 @@ function task(id: string, start: string, end: string, trackId = "t1"): Clip {
   return ClipSchema.parse({
     id,
     trackId,
-    kind: "task",
+    kind: "span",
     title: id,
     start,
     end,

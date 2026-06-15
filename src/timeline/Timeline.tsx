@@ -14,8 +14,8 @@ import {
 import {
   EventDiamond,
   FlagMarker,
+  SpanBar,
   StemBar,
-  TaskBar,
   type ClipBox,
 } from "./ClipShapes";
 import { CalendarStrip } from "./CalendarStrip";
@@ -186,12 +186,12 @@ export function Timeline() {
       if (lay.collapsed) {
         const x = sx(c.start);
         const endIso =
-          c.kind === "task"
+          c.kind === "span"
             ? c.end ?? c.start
             : c.kind === "stem"
               ? c.recurrence?.until ?? c.start
               : c.start;
-        const w = c.kind === "task" || c.kind === "stem" ? Math.max(2, sx(endIso) - x) : 4;
+        const w = c.kind === "span" || c.kind === "stem" ? Math.max(2, sx(endIso) - x) : 4;
         out.push({ clip: c, color, dim, box: { x, y: lay.yStart + 4, w, h: lay.height - 8 } });
         continue;
       }
@@ -223,9 +223,9 @@ export function Timeline() {
         continue;
       }
 
-      const sub = lay.taskAssignments.get(c.id) ?? 0;
-      const y = lay.taskLaneStartY + sub * LANE_HEIGHT;
-      if (c.kind === "task") {
+      const sub = lay.spanAssignments.get(c.id) ?? 0;
+      const y = lay.spanLaneStartY + sub * LANE_HEIGHT;
+      if (c.kind === "span") {
         const x = sx(c.start);
         const w = Math.max(8, sx(c.end ?? c.start) - x);
         out.push({ clip: c, color, dim, box: { x, y, w, h: LANE_HEIGHT } });
@@ -307,8 +307,8 @@ export function Timeline() {
                 };
                 const group = (() => {
                   switch (clip.kind) {
-                    case "task":
-                      return <TaskBar key={clip.id} clip={clip} trackColor={color} box={box} selected={isSelected} onClick={onClick} />;
+                    case "span":
+                      return <SpanBar key={clip.id} clip={clip} trackColor={color} box={box} selected={isSelected} onClick={onClick} />;
                     case "stem":
                       return <StemBar key={clip.id} clip={clip} trackColor={color} box={box} selected={isSelected} onClick={onClick} occurrenceXs={occurrenceXs} />;
                     case "event":

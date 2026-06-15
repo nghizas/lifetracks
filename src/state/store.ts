@@ -26,8 +26,6 @@ const MAX_HISTORY = 100;
 export interface ViewState {
   scrollX: number;
   pxPerDay: number;
-  /** Width in CSS px of the left track-header column. Adjustable by drag. */
-  headerWidth: number;
 }
 
 export interface Selection {
@@ -120,7 +118,7 @@ export const useStore = create<LifetracksStore>((set, get) => {
   return {
     roadmap: EMPTY_ROADMAP,
     ready: false,
-    view: { scrollX: 0, pxPerDay: 10, headerWidth: 124 },
+    view: { scrollX: 0, pxPerDay: 10 },
     selection: null,
     sheet: null,
     history: { undo: [], redo: [] },

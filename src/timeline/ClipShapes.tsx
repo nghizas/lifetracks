@@ -1,13 +1,12 @@
-// SVG shape components for each clip kind. Visual rules (post-feedback):
+// SVG shape components for each clip kind. Visual rules:
 //
-//   - Span  (kind="task"): rounded pill bar. Minimum visible width so a
+//   - Span  (kind="span"): rounded pill bar. Minimum visible width so a
 //     one-day span still reads as a span, never collapses into a marker.
 //     Label inside, truncated to fit; hidden when too narrow (tap to read).
 //   - Stem  (kind="stem"): a thin colored baseline plus a row of filled
 //     circles at each recurrence date. The caller supplies the visible
 //     occurrence x-positions (already thinned for the current zoom).
-//   - Event (kind="event"): diamond marker. The disruption zone (if any)
-//     is drawn behind the diamond by the parent renderer. No label.
+//   - Event (kind="event"): diamond marker on its date. No label, no zone.
 //   - Flag  (kind="flag"): small flag pictogram. No label.
 
 import type { Clip } from "@/core";
@@ -48,11 +47,10 @@ function truncateToFit(s: string, widthPx: number): string {
   return s.slice(0, maxChars - 1) + "…";
 }
 
-// A one-day span renders ~10px wide so it still reads as a pill (post-feedback:
-// "a little span should still look like a span, never an event marker").
+// A one-day span renders ~10px wide so it still reads as a pill, never a marker.
 const SPAN_MIN_WIDTH = 10;
 
-export function TaskBar({ clip, trackColor, box, selected, onClick }: BaseProps) {
+export function SpanBar({ clip, trackColor, box, selected, onClick }: BaseProps) {
   const w = Math.max(SPAN_MIN_WIDTH, box.w);
   const radius = Math.min(6, box.h / 2);
   const { emoji, rest } = splitEmoji(clip.title);
@@ -64,7 +62,7 @@ export function TaskBar({ clip, trackColor, box, selected, onClick }: BaseProps)
       onPointerUp={onClick}
       style={{ cursor: "pointer" }}
       data-clip-id={clip.id}
-      data-clip-kind="task"
+      data-clip-kind="span"
       aria-label={`Span: ${clip.title}`}
     >
       <rect
@@ -118,7 +116,6 @@ export function StemBar({
       data-clip-kind="stem"
       aria-label={`Stem: ${clip.title}`}
     >
-      {/* Quiet baseline so the rhythm has a visual track, not just floating dots */}
       <line
         x1={box.x}
         y1={baselineY}
@@ -128,7 +125,6 @@ export function StemBar({
         strokeWidth={1}
         opacity={0.25}
       />
-      {/* Occurrence dots — one per recurrence (thinned to fit by the caller) */}
       {occurrenceXs.map((x, i) => (
         <circle
           key={i}

@@ -71,7 +71,7 @@ export function makeClip(input: MakeClipInput, now: string): Clip {
     effort: input.effort ?? 3,
     updatedAt: now,
   };
-  if (input.kind === "task") {
+  if (input.kind === "span") {
     base.end = input.end ?? addMonths(input.start, 3);
   } else if (input.kind === "stem") {
     base.recurrence = input.recurrence

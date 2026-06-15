@@ -5,7 +5,7 @@ import { selectOrderedTracks, useStore } from "@/state";
 import { Field, Sheet, inputClass } from "./Sheet";
 
 const KIND_LABEL: Record<ClipKind, string> = {
-  task: "Span",
+  span: "Span",
   event: "Event",
   stem: "Stem",
   flag: "Flag",
@@ -79,7 +79,7 @@ export function EditClipSheet() {
     patchClip(clip.id, {
       title: t,
       start,
-      end: clip.kind === "task" ? end ?? start : clip.end,
+      end: clip.kind === "span" ? end ?? start : clip.end,
       trackId,
       status,
       startTime: clip.kind === "event" ? (startTime || null) : clip.startTime,
@@ -149,7 +149,7 @@ export function EditClipSheet() {
           value={start}
           onChange={(e) => {
             setStart(e.target.value);
-            if (clip.kind === "task" && end && end < e.target.value) {
+            if (clip.kind === "span" && end && end < e.target.value) {
               setEnd(addMonths(e.target.value, 2));
             }
           }}
@@ -157,7 +157,7 @@ export function EditClipSheet() {
         />
       </Field>
 
-      {clip.kind === "task" ? (
+      {clip.kind === "span" ? (
         <Field label="End">
           <input
             type="date"

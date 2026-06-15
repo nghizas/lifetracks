@@ -78,7 +78,7 @@ export function runSequencer(roadmap: Roadmap, today: string): SequencerResult {
 
   // 1. Topological sort of task/flag by dependsOn (cycle detection).
   const graph = new Map<string, Set<string>>();
-  const nodes = clips.filter((c) => c.kind === "task" || c.kind === "flag");
+  const nodes = clips.filter((c) => c.kind === "span" || c.kind === "flag");
   for (const c of nodes) {
     graph.set(
       c.id,
@@ -155,7 +155,7 @@ export function runSequencer(roadmap: Roadmap, today: string): SequencerResult {
   for (const c of clips) {
     if (c.status === "done" || c.status === "skipped") continue;
     const e = clampEffort(c.effort);
-    if (c.kind === "task") {
+    if (c.kind === "span") {
       const startD = parseDate(c.start);
       const endD = parseDate(c.end ?? c.start);
       const perMonth = e / 5;
@@ -251,7 +251,7 @@ export function runSequencer(roadmap: Roadmap, today: string): SequencerResult {
     const zStart = addMonths(ev.start, -d.monthsBefore);
     const zEnd = addMonths(ev.start, d.monthsAfter);
     for (const t of clips) {
-      if (t.kind !== "task") continue;
+      if (t.kind !== "span") continue;
       if (t.status === "done" || t.status === "skipped") continue;
       if (t.effort < 4) continue;
       if (parseDate(t.start) > parseDate(zEnd)) continue;

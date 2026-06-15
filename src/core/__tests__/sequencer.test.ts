@@ -25,7 +25,7 @@ function task(
   return ClipSchema.parse({
     id,
     trackId,
-    kind: "task",
+    kind: "span",
     title: id,
     start,
     end,

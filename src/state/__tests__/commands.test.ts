@@ -35,7 +35,7 @@ function makeClip(id: string, trackId: string): Clip {
   return ClipSchema.parse({
     id,
     trackId,
-    kind: "task",
+    kind: "span",
     title: id,
     start: "2026-07-01",
     end: "2026-08-01",

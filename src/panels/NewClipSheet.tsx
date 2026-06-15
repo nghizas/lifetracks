@@ -4,7 +4,7 @@ import { selectOrderedTracks, useStore } from "@/state";
 import { Field, Sheet, inputClass } from "./Sheet";
 
 const KINDS: { value: ClipKind; label: string; hint: string }[] = [
-  { value: "task", label: "Span", hint: "a stretch of work" },
+  { value: "span", label: "Span", hint: "a stretch of work" },
   { value: "event", label: "Event", hint: "a fixed date" },
   { value: "stem", label: "Stem", hint: "a recurring habit" },
   { value: "flag", label: "Flag", hint: "a milestone" },
@@ -39,7 +39,7 @@ export function NewClipSheet() {
   const patchClip = useStore((s) => s.patchClip);
   const tracks = useStore(selectOrderedTracks);
 
-  const [kind, setKind] = useState<ClipKind>("task");
+  const [kind, setKind] = useState<ClipKind>("span");
   const [title, setTitle] = useState("");
   const [start, setStart] = useState(todayStr());
   const [end, setEnd] = useState(addMonths(todayStr(), 2));
@@ -53,7 +53,7 @@ export function NewClipSheet() {
     if (!open) return;
     const fallbackTrack = tracks[0]?.id ?? "";
     const initialStart = defaults?.start ?? todayStr();
-    setKind("task");
+    setKind("span");
     setTitle("");
     setStart(initialStart);
     setEnd(addMonths(initialStart, 2));
@@ -80,7 +80,7 @@ export function NewClipSheet() {
       kind,
       title: t,
       start,
-      end: kind === "task" ? end : null,
+      end: kind === "span" ? end : null,
       recurrence:
         kind === "stem" ? { freq: cadence, until, interval: 1, count } : undefined,
     });
@@ -172,13 +172,13 @@ export function NewClipSheet() {
           value={start}
           onChange={(e) => {
             setStart(e.target.value);
-            if (kind === "task") setEnd(addMonths(e.target.value, 2));
+            if (kind === "span") setEnd(addMonths(e.target.value, 2));
           }}
           className={inputClass}
         />
       </Field>
 
-      {kind === "task" ? (
+      {kind === "span" ? (
         <Field label="End">
           <input
             type="date"

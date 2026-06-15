@@ -16,7 +16,7 @@ function resetStore(): void {
     ready: true,
     history: { undo: [], redo: [] },
     selection: null,
-    view: { scrollX: 0, pxPerDay: 10, headerWidth: 124 },
+    view: { scrollX: 0, pxPerDay: 10 },
   });
 }
 
@@ -36,13 +36,13 @@ describe("store actions", () => {
     const t = useStore.getState().addTrack({ name: "career" });
     useStore.getState().addClip({
       trackId: t.id,
-      kind: "task",
+      kind: "span",
       title: "promo",
       start: "2026-07-01",
     });
     useStore.getState().addClip({
       trackId: t.id,
-      kind: "task",
+      kind: "span",
       title: "review",
       start: "2026-09-01",
     });
@@ -61,7 +61,7 @@ describe("store actions", () => {
     const t = useStore.getState().addTrack({ name: "career" });
     const c = useStore.getState().addClip({
       trackId: t.id,
-      kind: "task",
+      kind: "span",
       title: "before",
       start: "2026-07-01",
     });

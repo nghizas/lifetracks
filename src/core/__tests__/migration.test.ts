@@ -91,10 +91,10 @@ describe("migrateV2 round-trip", () => {
     expect(reparsed.version).toBe(3);
   });
 
-  it("renames kinds: goal→task, recurring→stem, milestone→flag, event→event", () => {
+  it("renames kinds: goal→span, recurring→stem, milestone→flag, event→event", () => {
     const v3 = migrateV2(V2_EXPORT, NOW);
     const byId = new Map(v3.clips.map((c) => [c.id, c]));
-    expect(byId.get("c-promo")?.kind).toBe("task");
+    expect(byId.get("c-promo")?.kind).toBe("span");
     expect(byId.get("c-walk")?.kind).toBe("stem");
     expect(byId.get("c-baby")?.kind).toBe("event");
     expect(byId.get("c-flag")?.kind).toBe("flag");

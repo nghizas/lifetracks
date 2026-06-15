@@ -2,8 +2,12 @@
 // Pure module: no React, no DOM, no Dexie.
 //
 // Vocabulary (user-facing → internal kind):
-//   Event → "event" · Task → "task" · Stem → "stem" · Flag → "flag"
-// v2→v3 renames: goal→task, recurring→stem, milestone→flag (event unchanged).
+//   Event → "event" · Span → "span" · Stem → "stem" · Flag → "flag"
+// v2→v3 renames: goal→span, recurring→stem, milestone→flag (event unchanged).
+// Backwards compat: any persisted clip with `kind: "task"` (an earlier v3
+// naming) is coerced to "span" at parse time via z.preprocess, so old
+// IndexedDB data and v2/v3 JSON exports round-trip without an explicit
+// migration step.
 
 import { z } from "zod";
 
@@ -15,7 +19,11 @@ const isoDate = z
 
 const isoDateOrNull = isoDate.nullable();
 
-export const ClipKindSchema = z.enum(["event", "task", "stem", "flag"]);
+const ClipKindEnumSchema = z.enum(["event", "span", "stem", "flag"]);
+export const ClipKindSchema = z.preprocess(
+  (val) => (val === "task" ? "span" : val),
+  ClipKindEnumSchema,
+);
 export type ClipKind = z.infer<typeof ClipKindSchema>;
 
 export const ClipStatusSchema = z.enum(["planned", "active", "done", "skipped"]);
@@ -134,7 +142,7 @@ export function emptyRoadmap(now: string): Roadmap {
  * ========================================================================= */
 
 const V2_KIND_MAP: Record<string, ClipKind> = {
-  goal: "task",
+  goal: "span",
   recurring: "stem",
   milestone: "flag",
   event: "event",
@@ -229,7 +237,7 @@ export function migrateV2(raw: unknown, now: string): Roadmap {
   );
 
   const clips: Clip[] = (v2.clips ?? []).map((c) => {
-    const kind = V2_KIND_MAP[c.kind] ?? "task";
+    const kind = V2_KIND_MAP[c.kind] ?? "span";
     return ClipSchema.parse({
       id: c.id,
       trackId: c.trackId,

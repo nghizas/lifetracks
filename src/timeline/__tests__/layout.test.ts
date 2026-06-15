@@ -30,7 +30,7 @@ function task(id: string, trackId: string, start: string, end: string): Clip {
   return ClipSchema.parse({
     id,
     trackId,
-    kind: "task",
+    kind: "span",
     title: id,
     start,
     end,
@@ -54,7 +54,7 @@ describe("computeTrackLayouts", () => {
     const r = computeTrackLayouts([track("t1")], []);
     expect(r.totalHeight).toBe(MIN_TRACK_HEIGHT);
     const lay = r.layouts.get("t1")!;
-    expect(lay.taskLaneCount).toBe(0);
+    expect(lay.spanLaneCount).toBe(0);
     expect(lay.height).toBe(MIN_TRACK_HEIGHT);
   });
 
@@ -67,7 +67,7 @@ describe("computeTrackLayouts", () => {
       ],
     );
     expect(r.totalHeight).toBe(LABEL_ROW_HEIGHT + LANE_HEIGHT);
-    expect(r.layouts.get("t1")!.taskLaneCount).toBe(1);
+    expect(r.layouts.get("t1")!.spanLaneCount).toBe(1);
   });
 
   it("overlapping tasks open extra lanes → height grows", () => {
@@ -79,7 +79,7 @@ describe("computeTrackLayouts", () => {
         task("c", "t1", "2026-03-01", "2026-05-01"),
       ],
     );
-    expect(r.layouts.get("t1")!.taskLaneCount).toBe(3);
+    expect(r.layouts.get("t1")!.spanLaneCount).toBe(3);
     expect(r.totalHeight).toBe(LABEL_ROW_HEIGHT + 3 * LANE_HEIGHT);
   });
 
@@ -93,7 +93,7 @@ describe("computeTrackLayouts", () => {
     );
     const lay = r.layouts.get("t1")!;
     expect(lay.flagLaneY).toBe(LABEL_ROW_HEIGHT);
-    expect(lay.taskLaneStartY).toBe(LABEL_ROW_HEIGHT + FLAG_LANE_HEIGHT);
+    expect(lay.spanLaneStartY).toBe(LABEL_ROW_HEIGHT + FLAG_LANE_HEIGHT);
     expect(lay.height).toBe(LABEL_ROW_HEIGHT + FLAG_LANE_HEIGHT + LANE_HEIGHT);
   });
 
@@ -104,7 +104,7 @@ describe("computeTrackLayouts", () => {
     );
     const lay = r.layouts.get("t1")!;
     expect(lay.collapsed).toBe(true);
-    expect(lay.taskLaneCount).toBe(0);
+    expect(lay.spanLaneCount).toBe(0);
   });
 
   it("multiple tracks stack vertically using yStart from prior heights", () => {

@@ -143,7 +143,7 @@ export function CalendarStrip({
   const clipShapes = useMemo(() => {
     interface Span {
       key: string;
-      kind: "task";
+      kind: "span";
       x: number;
       y: number;
       w: number;
@@ -182,12 +182,12 @@ export function CalendarStrip({
       const yH = Math.max(3, rowHeight - 4);
       const xStart = sxForDate(c.start);
       switch (c.kind) {
-        case "task": {
+        case "span": {
           const xEnd = sxForDate(c.end ?? c.start);
           const w = Math.max(3, xEnd - xStart);
           out.push({
             key: c.id,
-            kind: "task",
+            kind: "span",
             x: xStart,
             y: yTop,
             w,

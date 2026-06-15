@@ -69,7 +69,7 @@ export function buildSampleLife(today: string): Seed {
     ClipSchema.parse({
       id: uid(),
       trackId: tFamily,
-      kind: "task",
+      kind: "span",
       title: "Set up nursery",
       start: addMonths(today, 2),
       end: addMonths(today, 4),
@@ -98,7 +98,7 @@ export function buildSampleLife(today: string): Seed {
     ClipSchema.parse({
       id: uid(),
       trackId: tHealth,
-      kind: "task",
+      kind: "span",
       title: "Train for half-marathon",
       start: addMonths(today, 1),
       end: addMonths(today, 5),
@@ -117,7 +117,7 @@ export function buildSampleLife(today: string): Seed {
     ClipSchema.parse({
       id: uid(),
       trackId: tCareer,
-      kind: "task",
+      kind: "span",
       title: "Promo packet",
       start: addMonths(today, 1),
       end: addMonths(today, 4),
@@ -146,7 +146,7 @@ export function buildSampleLife(today: string): Seed {
     ClipSchema.parse({
       id: uid(),
       trackId: tCareer,
-      kind: "task",
+      kind: "span",
       title: "Learn distributed systems",
       start: addMonths(today, 6),
       end: addMonths(today, 12),

@@ -5,7 +5,7 @@
 // Within a track:
 //   1. label row (always)
 //   2. (optional) thin flag row
-//   3. stack of task/event sub-lanes (greedy interval packing)
+//   3. stack of span/event sub-lanes (greedy interval packing)
 //   4. stack of stem sub-lanes (greedy interval packing)
 // Heights grow to fit so no two clips ever visually overlap.
 // Pure — no React. Driven by core's `packIntoLanes`.
@@ -23,9 +23,9 @@ export interface TrackLayout {
   height: number;
   collapsed: boolean;
   flagLaneY: number | null;
-  taskLaneStartY: number;
-  taskLaneCount: number;
-  taskAssignments: Map<string, number>;
+  spanLaneStartY: number;
+  spanLaneCount: number;
+  spanAssignments: Map<string, number>;
   stemLaneStartY: number;
   stemLaneCount: number;
   stemAssignments: Map<string, number>;
@@ -46,7 +46,7 @@ export function computeTrackLayouts(
   for (const track of orderedTracks) {
     const trackClips = clips.filter((c) => c.trackId === track.id);
     const flags = trackClips.filter((c) => c.kind === "flag");
-    const taskEvent = trackClips.filter((c) => c.kind === "task" || c.kind === "event");
+    const spanEvent = trackClips.filter((c) => c.kind === "span" || c.kind === "event");
     const stems = trackClips.filter((c) => c.kind === "stem");
 
     if (track.collapsed) {
@@ -55,9 +55,9 @@ export function computeTrackLayouts(
         height: COLLAPSED_TRACK_HEIGHT,
         collapsed: true,
         flagLaneY: null,
-        taskLaneStartY: y + LABEL_ROW_HEIGHT,
-        taskLaneCount: 0,
-        taskAssignments: new Map(),
+        spanLaneStartY: y + LABEL_ROW_HEIGHT,
+        spanLaneCount: 0,
+        spanAssignments: new Map(),
         stemLaneStartY: y + LABEL_ROW_HEIGHT,
         stemLaneCount: 0,
         stemAssignments: new Map(),
@@ -74,10 +74,10 @@ export function computeTrackLayouts(
       inner += FLAG_LANE_HEIGHT;
     }
 
-    const taskPack = packIntoLanes(taskEvent);
-    const taskLaneStartY = y + inner;
-    const taskLaneCount = Math.max(taskEvent.length > 0 ? 1 : 0, taskPack.laneCount);
-    inner += taskLaneCount * LANE_HEIGHT;
+    const spanPack = packIntoLanes(spanEvent);
+    const spanLaneStartY = y + inner;
+    const spanLaneCount = Math.max(spanEvent.length > 0 ? 1 : 0, spanPack.laneCount);
+    inner += spanLaneCount * LANE_HEIGHT;
 
     const stemPack = packIntoLanes(stems);
     const stemLaneStartY = y + inner;
@@ -90,9 +90,9 @@ export function computeTrackLayouts(
       height,
       collapsed: false,
       flagLaneY,
-      taskLaneStartY,
-      taskLaneCount,
-      taskAssignments: taskPack.assignments,
+      spanLaneStartY,
+      spanLaneCount,
+      spanAssignments: spanPack.assignments,
       stemLaneStartY,
       stemLaneCount,
       stemAssignments: stemPack.assignments,
