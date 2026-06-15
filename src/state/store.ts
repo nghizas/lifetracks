@@ -13,6 +13,7 @@ import {
   SettingsSchema,
   todayStr,
 } from "@/core";
+import type { ComposerFocus, ComposerProposal } from "@/ai";
 import {
   type Command,
   type HistoryEntry,
@@ -46,6 +47,20 @@ interface ComposerMessage {
   role: "user" | "assistant";
   content: string;
 }
+
+export interface PendingProposal {
+  focus: ComposerFocus;
+  proposal: ComposerProposal;
+  /** When the newTrack has been materialised, this holds its real track id. */
+  resolvedNewTrackId?: string;
+  scopeWarning?: string;
+}
+
+export type ProposalItemRef =
+  | { kind: "newTrack" }
+  | { kind: "newClip"; index: number }
+  | { kind: "modification"; index: number }
+  | { kind: "removal"; index: number };
 
 export interface LifetracksStore {
   // Persisted
@@ -106,6 +121,13 @@ export interface LifetracksStore {
   composerThreads: Record<string, ComposerMessage[]>;
   appendComposerMessage: (focusKey: string, message: ComposerMessage) => void;
   resetComposerThread: (focusKey: string) => void;
+
+  // Pending Composer proposal (rendered as ghosts on the canvas)
+  currentProposal: PendingProposal | null;
+  setCurrentProposal: (p: PendingProposal | null) => void;
+  acceptProposalItem: (item: ProposalItemRef) => void;
+  rejectProposalItem: (item: ProposalItemRef) => void;
+  acceptAllProposal: () => void;
 }
 
 const EMPTY_ROADMAP: Roadmap = RoadmapSchema.parse({
@@ -134,6 +156,7 @@ export const useStore = create<LifetracksStore>((set, get) => {
     sheet: null,
     history: { undo: [], redo: [] },
     composerThreads: {},
+    currentProposal: null,
 
     hydrate(roadmap) {
       set({ roadmap, ready: true, history: { undo: [], redo: [] } });
@@ -360,6 +383,201 @@ export const useStore = create<LifetracksStore>((set, get) => {
         delete next[focusKey];
         return { composerThreads: next };
       });
+    },
+
+    setCurrentProposal(p) {
+      set({ currentProposal: p });
+    },
+
+    acceptProposalItem(item) {
+      const proposal = get().currentProposal;
+      if (!proposal) return;
+      const store = get();
+
+      const removeItemFromProposal = (mutator: (p: ComposerProposal) => ComposerProposal): void => {
+        const next = mutator(proposal.proposal);
+        const empty =
+          next.newTrack === null &&
+          next.newClips.length === 0 &&
+          next.modifications.length === 0 &&
+          next.removals.length === 0;
+        set({
+          currentProposal: empty ? null : { ...proposal, proposal: next },
+        });
+      };
+
+      // Resolve the actual track id for a given trackRef (real or tempId).
+      const resolveTrackId = (refId: string): string | null => {
+        if (proposal.proposal.newTrack && refId === proposal.proposal.newTrack.tempId) {
+          // The new track must be materialised before clips can reference it.
+          if (proposal.resolvedNewTrackId) return proposal.resolvedNewTrackId;
+          const created = store.addTrack({
+            name: proposal.proposal.newTrack.name,
+            color: proposal.proposal.newTrack.color,
+          });
+          // Remember the real id for subsequent accepts.
+          set((s) =>
+            s.currentProposal
+              ? { currentProposal: { ...s.currentProposal, resolvedNewTrackId: created.id } }
+              : {},
+          );
+          return created.id;
+        }
+        // Existing track id
+        if (store.roadmap.tracks.some((t) => t.id === refId)) return refId;
+        return null;
+      };
+
+      switch (item.kind) {
+        case "newTrack": {
+          if (!proposal.proposal.newTrack) return;
+          // Materialise via resolveTrackId — and clear the newTrack field
+          resolveTrackId(proposal.proposal.newTrack.tempId);
+          removeItemFromProposal((p) => ({ ...p, newTrack: null }));
+          return;
+        }
+        case "newClip": {
+          const clip = proposal.proposal.newClips[item.index];
+          if (!clip) return;
+          const trackId = resolveTrackId(clip.trackId);
+          if (!trackId) {
+            console.warn("Couldn't resolve trackId for proposed clip:", clip);
+            return;
+          }
+          store.addClip({
+            trackId,
+            kind: clip.kind,
+            title: clip.title,
+            start: clip.start,
+            end: clip.end ?? null,
+            effort: clip.effort,
+            recurrence: clip.recurrence
+              ? {
+                  freq: clip.recurrence.freq,
+                  until: clip.recurrence.until,
+                  interval: clip.recurrence.interval ?? 1,
+                  count: clip.recurrence.count ?? 1,
+                }
+              : undefined,
+          });
+          removeItemFromProposal((p) => ({
+            ...p,
+            newClips: p.newClips.filter((_, i) => i !== item.index),
+          }));
+          return;
+        }
+        case "modification": {
+          const mod = proposal.proposal.modifications[item.index];
+          if (!mod) return;
+          // Fill in defaults on a partial recurrence so the patch matches
+          // the strict Clip schema.
+          const changes: Partial<Omit<Clip, "id">> = {
+            title: mod.changes.title,
+            start: mod.changes.start,
+            end: mod.changes.end,
+            effort: mod.changes.effort,
+            notes: mod.changes.notes,
+            status: mod.changes.status,
+            startTime: mod.changes.startTime,
+            recurrence:
+              mod.changes.recurrence === null
+                ? null
+                : mod.changes.recurrence
+                  ? {
+                      freq: mod.changes.recurrence.freq,
+                      until: mod.changes.recurrence.until,
+                      interval: mod.changes.recurrence.interval ?? 1,
+                      count: mod.changes.recurrence.count ?? 1,
+                    }
+                  : undefined,
+          };
+          // Strip undefineds so patchClip only sees real changes.
+          for (const k of Object.keys(changes) as (keyof typeof changes)[]) {
+            if (changes[k] === undefined) delete changes[k];
+          }
+          store.patchClip(mod.clipId, changes);
+          removeItemFromProposal((p) => ({
+            ...p,
+            modifications: p.modifications.filter((_, i) => i !== item.index),
+          }));
+          return;
+        }
+        case "removal": {
+          const clipId = proposal.proposal.removals[item.index];
+          if (!clipId) return;
+          store.removeClip(clipId);
+          removeItemFromProposal((p) => ({
+            ...p,
+            removals: p.removals.filter((_, i) => i !== item.index),
+          }));
+          return;
+        }
+      }
+    },
+
+    rejectProposalItem(item) {
+      const proposal = get().currentProposal;
+      if (!proposal) return;
+
+      const removeItemFromProposal = (mutator: (p: ComposerProposal) => ComposerProposal): void => {
+        const next = mutator(proposal.proposal);
+        const empty =
+          next.newTrack === null &&
+          next.newClips.length === 0 &&
+          next.modifications.length === 0 &&
+          next.removals.length === 0;
+        set({
+          currentProposal: empty ? null : { ...proposal, proposal: next },
+        });
+      };
+
+      switch (item.kind) {
+        case "newTrack": {
+          // Dropping a new track also drops any clips that referenced its tempId.
+          const tempId = proposal.proposal.newTrack?.tempId;
+          removeItemFromProposal((p) => ({
+            ...p,
+            newTrack: null,
+            newClips: tempId
+              ? p.newClips.filter((c) => c.trackId !== tempId)
+              : p.newClips,
+          }));
+          return;
+        }
+        case "newClip": {
+          removeItemFromProposal((p) => ({
+            ...p,
+            newClips: p.newClips.filter((_, i) => i !== item.index),
+          }));
+          return;
+        }
+        case "modification": {
+          removeItemFromProposal((p) => ({
+            ...p,
+            modifications: p.modifications.filter((_, i) => i !== item.index),
+          }));
+          return;
+        }
+        case "removal": {
+          removeItemFromProposal((p) => ({
+            ...p,
+            removals: p.removals.filter((_, i) => i !== item.index),
+          }));
+          return;
+        }
+      }
+    },
+
+    acceptAllProposal() {
+      const proposal = get().currentProposal;
+      if (!proposal) return;
+      // Snapshot counts up front. Each accept shifts the corresponding
+      // array, so we always accept index 0 of the remaining items.
+      const { newTrack, newClips, modifications, removals } = proposal.proposal;
+      if (newTrack) get().acceptProposalItem({ kind: "newTrack" });
+      for (let i = 0; i < newClips.length; i++) get().acceptProposalItem({ kind: "newClip", index: 0 });
+      for (let i = 0; i < modifications.length; i++) get().acceptProposalItem({ kind: "modification", index: 0 });
+      for (let i = 0; i < removals.length; i++) get().acceptProposalItem({ kind: "removal", index: 0 });
     },
   };
 });

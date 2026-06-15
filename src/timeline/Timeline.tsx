@@ -326,6 +326,14 @@ export function Timeline() {
                 }
                 return group;
               })}
+              {/* Ghost clips for the currently pending Composer proposal */}
+              <ProposalGhosts
+                canvasWidth={canvasWidth}
+                origin={origin}
+                pxPerDay={view.pxPerDay}
+                scrollX={view.scrollX}
+                layout={layout}
+              />
               {todayX >= -20 && todayX <= canvasWidth + 20 ? (
                 <g pointerEvents="none">
                   <line
@@ -416,6 +424,86 @@ export function Timeline() {
         />
       </div>
     </div>
+  );
+}
+
+function ProposalGhosts({
+  canvasWidth,
+  origin,
+  pxPerDay,
+  scrollX,
+  layout,
+}: {
+  canvasWidth: number;
+  origin: string;
+  pxPerDay: number;
+  scrollX: number;
+  layout: ReturnType<typeof computeTrackLayouts>;
+}) {
+  const proposal = useStore((s) => s.currentProposal);
+  if (!proposal) return null;
+  const tracks = useStore.getState().roadmap.tracks;
+  const sx = (d: string) => screenXForDate(origin, d, pxPerDay, scrollX);
+
+  // Only render ghosts for clips that target an existing track (the new-track
+  // case is handled by the ProposalDeck in the Composer sheet — once accepted
+  // the track exists and subsequent clips can render).
+  interface Ghost {
+    index: number;
+    x: number;
+    y: number;
+    w: number;
+    color: string;
+    title: string;
+    kind: "span" | "stem" | "event" | "flag";
+  }
+  const ghosts: Ghost[] = [];
+  proposal.proposal.newClips.forEach((c, i) => {
+    const lay = layout.layouts.get(c.trackId);
+    if (!lay) return;
+    const track = tracks.find((t) => t.id === c.trackId);
+    if (!track) return;
+    const color = track.color;
+    const x = sx(c.start);
+    const yTop = lay.spanLaneStartY;
+    let w = 14;
+    if (c.kind === "span") w = Math.max(12, sx(c.end ?? c.start) - x);
+    else if (c.kind === "stem") w = Math.max(12, sx(c.recurrence?.until ?? c.start) - x);
+    else if (c.kind === "event") w = 24;
+    ghosts.push({ index: i, x, y: yTop, w, color, title: c.title, kind: c.kind });
+  });
+
+  if (ghosts.length === 0) return null;
+  void canvasWidth;
+
+  return (
+    <g pointerEvents="none">
+      {ghosts.map((g) => (
+        <g key={`ghost-${g.index}`}>
+          <rect
+            x={g.x - 2}
+            y={g.y + 2}
+            width={Math.max(2, g.w + 4)}
+            height={24}
+            rx={6}
+            fill={g.color}
+            fillOpacity={0.12}
+            stroke={g.color}
+            strokeWidth={1.5}
+            strokeDasharray="5 3"
+          />
+          <text
+            x={g.x + 6}
+            y={g.y + 16}
+            fontSize={10}
+            fontWeight={700}
+            fill={g.color}
+          >
+            ✨ {g.title}
+          </text>
+        </g>
+      ))}
+    </g>
   );
 }
 

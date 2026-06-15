@@ -15,6 +15,7 @@ import {
 } from "@/ai";
 import { todayStr } from "@/core";
 import { selectOrderedTracks, useStore } from "@/state";
+import { ProposalDeck } from "./ProposalDeck";
 import { Sheet, inputClass } from "./Sheet";
 
 export function ComposerSheet() {
@@ -119,6 +120,14 @@ function ComposerBody({
       }
       appendMessage(focusKey(focus), { role: "assistant", content: result.message });
       setLastResult(result);
+      // Surface the proposal as ghosts on the canvas + per-item accept UI
+      if (hasProposal(result)) {
+        useStore.getState().setCurrentProposal({
+          focus,
+          proposal: result.proposal,
+          scopeWarning: result.scopeWarning,
+        });
+      }
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -178,10 +187,8 @@ function ComposerBody({
             {loading ? <Bubble role="assistant">Thinking…</Bubble> : null}
           </div>
 
-          {/* Proposal preview */}
-          {lastResult && hasProposal(lastResult) ? (
-            <ProposalPreview result={lastResult} />
-          ) : null}
+          {/* Live proposal — per-item accept / reject */}
+          <ProposalDeck />
 
           {lastResult?.scopeWarning ? (
             <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-900">
@@ -298,48 +305,5 @@ function hasProposal(r: ComposerResult): boolean {
     p.newClips.length > 0 ||
     p.modifications.length > 0 ||
     p.removals.length > 0
-  );
-}
-
-function ProposalPreview({ result }: { result: ComposerResult }) {
-  const p = result.proposal;
-  return (
-    <div className="rounded-md border border-ink/10 bg-white p-3 text-[12px]">
-      <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted">
-        Proposed (preview)
-      </div>
-      <ul className="space-y-0.5 leading-snug">
-        {p.newTrack ? (
-          <li>
-            <span className="font-semibold">New track:</span> {p.newTrack.name}{" "}
-            <span
-              className="ml-1 inline-block h-2 w-2 rounded-full align-middle"
-              style={{ background: p.newTrack.color }}
-            />
-          </li>
-        ) : null}
-        {p.newClips.map((c, i) => (
-          <li key={`new-${i}`}>
-            <span className="font-semibold">{c.kind}</span> "{c.title}" {c.start}
-            {c.end ? ` → ${c.end}` : ""}
-            {c.recurrence ? ` · ${c.recurrence.freq}` : ""}
-          </li>
-        ))}
-        {p.modifications.map((m, i) => (
-          <li key={`mod-${i}`}>
-            <span className="font-semibold">Modify</span> {m.clipId}:{" "}
-            {Object.keys(m.changes).join(", ")}
-          </li>
-        ))}
-        {p.removals.map((id) => (
-          <li key={`rm-${id}`}>
-            <span className="font-semibold">Remove</span> {id}
-          </li>
-        ))}
-      </ul>
-      <div className="mt-2 text-[10px] text-muted">
-        Accept / reject coming in the next slice. For now this is a read-only preview.
-      </div>
-    </div>
   );
 }
