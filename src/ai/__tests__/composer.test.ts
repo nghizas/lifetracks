@@ -315,8 +315,8 @@ describe("composeProposal", () => {
       roadmap: roadmap({ tracks: [track("t-career", "Career")] }),
       today: NOW,
     });
-    expect("kind" in result && result.kind === "parse").toBe(false);
-    if (!("kind" in result)) {
+    expect(result.kind).toBe("ok");
+    if (result.kind === "ok") {
       expect(result.proposal.newClips).toHaveLength(1);
       expect(result.scopeWarning).toBeUndefined();
     }
@@ -331,7 +331,7 @@ describe("composeProposal", () => {
       roadmap: roadmap({ tracks: [track("t-career", "Career")] }),
       today: NOW,
     });
-    expect("kind" in result && result.kind === "parse").toBe(true);
+    expect(result.kind).toBe("parse");
   });
 
   it("sends the system prompt + thread + user message to the provider", async () => {

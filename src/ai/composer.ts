@@ -108,6 +108,7 @@ export interface ComposerRequest {
 }
 
 export interface ComposerResult {
+  kind: "ok";
   message: string;
   questions: string[];
   suggestions: string[];
@@ -153,6 +154,7 @@ export async function composeProposal(
 
   const enforced = enforceScope(parsed.value, request);
   return {
+    kind: "ok",
     message: enforced.result.message,
     questions: enforced.result.questions,
     suggestions: enforced.result.suggestions.slice(0, 2),

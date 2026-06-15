@@ -81,6 +81,14 @@ export function App() {
               >
                 + Clip
               </button>
+              <button
+                type="button"
+                onClick={() => openSheet({ kind: "composer", focus: { kind: "new-track" } })}
+                aria-label="Open Composer"
+                className="grid h-11 w-11 place-items-center rounded-full border border-violet-400 bg-violet-50 text-[16px] font-bold text-violet-700"
+              >
+                ✨
+              </button>
               <span className="ml-auto flex gap-1.5">
                 <button
                   type="button"

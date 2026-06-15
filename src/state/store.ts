@@ -38,8 +38,14 @@ export type SheetState =
   | { kind: "new-clip"; defaults?: { trackId?: string; start?: string } }
   | { kind: "edit-clip"; clipId: string }
   | { kind: "edit-track"; trackId: string }
+  | { kind: "composer"; focus: { kind: "new-track" } | { kind: "track"; trackId: string } }
   | { kind: "settings" }
   | null;
+
+interface ComposerMessage {
+  role: "user" | "assistant";
+  content: string;
+}
 
 export interface LifetracksStore {
   // Persisted
@@ -95,6 +101,11 @@ export interface LifetracksStore {
   sheet: SheetState;
   openSheet: (s: NonNullable<SheetState>) => void;
   closeSheet: () => void;
+
+  // Composer per-focus threads (ephemeral; lost on refresh — Phase 4 will persist)
+  composerThreads: Record<string, ComposerMessage[]>;
+  appendComposerMessage: (focusKey: string, message: ComposerMessage) => void;
+  resetComposerThread: (focusKey: string) => void;
 }
 
 const EMPTY_ROADMAP: Roadmap = RoadmapSchema.parse({
@@ -122,6 +133,7 @@ export const useStore = create<LifetracksStore>((set, get) => {
     selection: null,
     sheet: null,
     history: { undo: [], redo: [] },
+    composerThreads: {},
 
     hydrate(roadmap) {
       set({ roadmap, ready: true, history: { undo: [], redo: [] } });
@@ -328,6 +340,26 @@ export const useStore = create<LifetracksStore>((set, get) => {
 
     closeSheet() {
       set({ sheet: null });
+    },
+
+    appendComposerMessage(focusKey, message) {
+      set((s) => {
+        const prev = s.composerThreads[focusKey] ?? [];
+        return {
+          composerThreads: {
+            ...s.composerThreads,
+            [focusKey]: [...prev, message].slice(-50),
+          },
+        };
+      });
+    },
+
+    resetComposerThread(focusKey) {
+      set((s) => {
+        const next = { ...s.composerThreads };
+        delete next[focusKey];
+        return { composerThreads: next };
+      });
     },
   };
 });
