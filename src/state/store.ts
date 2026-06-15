@@ -53,6 +53,10 @@ export interface PendingProposal {
   proposal: ComposerProposal;
   /** When the newTrack has been materialised, this holds its real track id. */
   resolvedNewTrackId?: string;
+  /** The tempId of the newTrack at the time it was materialised — used to keep
+      resolving subsequent newClips that still reference the old tempId even
+      after `proposal.newTrack` is cleared from the proposal. */
+  resolvedNewTrackTempId?: string;
   scopeWarning?: string;
 }
 
@@ -394,36 +398,51 @@ export const useStore = create<LifetracksStore>((set, get) => {
       if (!proposal) return;
       const store = get();
 
+      // Re-reads currentProposal so we don't clobber state set in this call
+      // (resolveTrackId stamps `resolvedNewTrackId` on the store; the closure
+      // `proposal` is now stale).
       const removeItemFromProposal = (mutator: (p: ComposerProposal) => ComposerProposal): void => {
-        const next = mutator(proposal.proposal);
+        const fresh = get().currentProposal;
+        if (!fresh) return;
+        const next = mutator(fresh.proposal);
         const empty =
           next.newTrack === null &&
           next.newClips.length === 0 &&
           next.modifications.length === 0 &&
           next.removals.length === 0;
         set({
-          currentProposal: empty ? null : { ...proposal, proposal: next },
+          currentProposal: empty ? null : { ...fresh, proposal: next },
         });
       };
 
-      // Resolve the actual track id for a given trackRef (real or tempId).
+      // Resolve the actual track id for a given trackRef (real id or tempId).
+      // Once the newTrack has been materialised, subsequent newClips may still
+      // reference the original tempId — we map them via resolvedNewTrackTempId.
       const resolveTrackId = (refId: string): string | null => {
-        if (proposal.proposal.newTrack && refId === proposal.proposal.newTrack.tempId) {
-          // The new track must be materialised before clips can reference it.
-          if (proposal.resolvedNewTrackId) return proposal.resolvedNewTrackId;
+        const fresh = get().currentProposal;
+        if (fresh?.resolvedNewTrackId && refId === fresh.resolvedNewTrackTempId) {
+          return fresh.resolvedNewTrackId;
+        }
+        if (fresh?.proposal.newTrack && refId === fresh.proposal.newTrack.tempId) {
+          if (fresh.resolvedNewTrackId) return fresh.resolvedNewTrackId;
+          const tempId = fresh.proposal.newTrack.tempId;
           const created = store.addTrack({
-            name: proposal.proposal.newTrack.name,
-            color: proposal.proposal.newTrack.color,
+            name: fresh.proposal.newTrack.name,
+            color: fresh.proposal.newTrack.color,
           });
-          // Remember the real id for subsequent accepts.
           set((s) =>
             s.currentProposal
-              ? { currentProposal: { ...s.currentProposal, resolvedNewTrackId: created.id } }
+              ? {
+                  currentProposal: {
+                    ...s.currentProposal,
+                    resolvedNewTrackId: created.id,
+                    resolvedNewTrackTempId: tempId,
+                  },
+                }
               : {},
           );
           return created.id;
         }
-        // Existing track id
         if (store.roadmap.tracks.some((t) => t.id === refId)) return refId;
         return null;
       };
@@ -520,14 +539,16 @@ export const useStore = create<LifetracksStore>((set, get) => {
       if (!proposal) return;
 
       const removeItemFromProposal = (mutator: (p: ComposerProposal) => ComposerProposal): void => {
-        const next = mutator(proposal.proposal);
+        const fresh = get().currentProposal;
+        if (!fresh) return;
+        const next = mutator(fresh.proposal);
         const empty =
           next.newTrack === null &&
           next.newClips.length === 0 &&
           next.modifications.length === 0 &&
           next.removals.length === 0;
         set({
-          currentProposal: empty ? null : { ...proposal, proposal: next },
+          currentProposal: empty ? null : { ...fresh, proposal: next },
         });
       };
 
